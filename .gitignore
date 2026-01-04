@@ -1,0 +1,22 @@
+# Temporary data files
+temp.json
+temp-memberlist.json
+temp-outofunitcallings.json
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local storage data
+localStorage/

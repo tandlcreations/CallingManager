@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ward Calling Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Ward Calling Manager</h1>
+            <button id="toggle-visibility-btn" class="header-icon-btn" title="Show/Hide Callings">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 5v.01M12 18.99V19M5 12h.01M18.99 12H19M7.05 7.05l.01.01M16.95 16.95l.01.01M7.05 16.95l.01.01M16.95 7.05l.01.01"/>
+                </svg>
+            </button>
+        </header>
+
+        <main>
+            <section id="home-section" class="section active">
+                <h2>TWO WAYS TO USE CALLINGMANAGER.COM</h2>
+                
+                <div class="options-container">
+                    <div class="option-card">
+                        <h3>1. Load demo calling data</h3>
+                        <p>If you don't have access to Leader and Clerk Resources or just want to kick the tires, try the demo below.</p>
+                        <button id="launch-demo-btn" class="primary-btn">LAUNCH DEMO</button>
+                    </div>
+
+                    <div class="option-card">
+                        <h3>2. Copy and paste from ChurchOfJesusChrist.org</h3>
+                        <ol>
+                            <li>First, <a href="https://lcr.churchofjesuschrist.org/" target="_blank">log into LCR as you normally would</a>.</li>
+                            <li>Click <a href="https://lcr.churchofjesuschrist.org/api/orgs/sub-orgs-with-callings?ip=true&lang=eng" target="_blank">this link</a> to display LCR calling data.</li>
+                            <li>Copy all the text on the page ("CTRL A" to select all, then "CTRL C" to copy)</li>
+                            <li>Paste into the first box below ("CTRL V" to paste)</li>
+                            <li>While logged into LCR, visit <a id="member-list-link" href="#" class="disabled-link" target="_blank">the Member List API</a> (link will activate after pasting calling data)</li>
+                            <li>Copy all the JSON text that appears and paste it into the second box below</li>
+                            <li>Optionally, you can include "Out of Unit Callings" by:
+                                <ol type="a">
+                                    <li>Visiting <a href="https://lcr.churchofjesuschrist.org/api/orgs/out-of-unit-callings?includeTypes=LIVING_INSIDE&lang=eng" target="_blank">the "Out of Unit Callings" page</a>.</li>
+                                    <li>Selecting all the text that appears and pasting it into the third box below.</li>
+                                </ol>
+                            </li>
+                            <li>Then submit the form to continue</li>
+                        </ol>
+
+                        <div class="form-group">
+                            <label for="callings-data">Callings by Organization <span class="required">*</span></label>
+                            <textarea id="callings-data" rows="8" placeholder="Paste LCR calling data here..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="member-list-data">Member List <span class="required">*</span></label>
+                            <textarea id="member-list-data" rows="8" placeholder="Paste member list JSON here..." required></textarea>
+                            <small>Required for assigning callings and viewing members without callings</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="out-of-unit-data">Out of Unit Callings (optional)</label>
+                            <textarea id="out-of-unit-data" rows="8" placeholder="Paste out of unit calling data here..."></textarea>
+                        </div>
+
+                        <button id="submit-data-btn" class="primary-btn">SUBMIT</button>
+                    </div>
+                </div>
+
+                <div class="disclaimer">
+                    <h4>wait... is this okay to do?</h4>
+                    <p>Not an official website of <a href="https://churchofjesuschrist.org/" target="_blank">The Church of Jesus Christ of Latter-day Saints</a>.</p>
+                </div>
+            </section>
+
+            <section id="manager-section" class="section">
+                <div class="toolbar">
+                    <button id="back-btn" class="secondary-btn">← Back to Home</button>
+                    <button id="export-btn" class="secondary-btn">Export Data</button>
+                    <input type="text" id="search-input" placeholder="Search callings or members..." />
+                </div>
+
+                <div id="callings-container" class="all-callings-container"></div>
+            </section>
+
+            <!-- Visibility Control Side Panel -->
+            <div id="visibility-panel" class="side-panel">
+                <div class="side-panel-header">
+                    <h2>Show/Hide</h2>
+                    <button class="close-btn" onclick="window.callingManager.closeVisibilityModal()">&times;</button>
+                </div>
+                <div class="side-panel-tabs">
+                    <button class="tab-btn active" data-tab="callings" onclick="window.callingManager.switchTab('callings')">Callings</button>
+                    <button class="tab-btn" data-tab="members" onclick="window.callingManager.switchTab('members')">Members</button>
+                </div>
+                <div class="side-panel-actions">
+                    <button onclick="window.callingManager.toggleAllItems(true)" class="secondary-btn">Show All</button>
+                    <button onclick="window.callingManager.toggleAllItems(false)" class="secondary-btn">Hide All</button>
+                </div>
+                <div class="side-panel-body">
+                    <div id="callings-tab-content" class="tab-content active">
+                        <div id="visibility-list" class="visibility-list"></div>
+                    </div>
+                    <div id="members-tab-content" class="tab-content">
+                        <div id="members-visibility-list" class="visibility-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Selection Modal -->
+            <div id="member-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Select Member</h2>
+                        <button class="close-btn" onclick="window.callingManager.closeMemberModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="text" id="member-search" class="modal-search" placeholder="Search members..." />
+                        <div id="member-list" class="member-list"></div>
+                        <div class="modal-actions">
+                            <button onclick="window.callingManager.closeMemberModal()" class="secondary-btn">Cancel</button>
+                            <button onclick="window.callingManager.showAddNewMember()" class="primary-btn">+ Add New Member</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>© 2026 CallingManager - Unofficial tool for church organization management</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

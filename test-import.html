@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test LCR Import</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow: auto;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test LCR Data Import</h1>
+    
+    <h2>Step 1: Load test data from temp.json</h2>
+    <button onclick="loadTestData()">Load temp.json</button>
+    
+    <h2>Step 2: View raw data (first 1000 chars)</h2>
+    <pre id="raw-data">Click "Load temp.json" to see data...</pre>
+    
+    <h2>Step 3: Convert to internal format</h2>
+    <button onclick="convertData()">Convert Data</button>
+    
+    <h2>Conversion Result:</h2>
+    <div id="status"></div>
+    <pre id="converted-data"></pre>
+    
+    <h2>Statistics:</h2>
+    <div id="stats"></div>
+
+    <script>
+        let rawLCRData = null;
+        let convertedData = null;
+
+        async function loadTestData() {
+            try {
+                const response = await fetch('temp.json');
+                rawLCRData = await response.json();
+                
+                document.getElementById('raw-data').textContent = 
+                    JSON.stringify(rawLCRData, null, 2).substring(0, 1000) + '\n\n... (truncated)';
+                
+                document.getElementById('status').innerHTML = 
+                    '<p class="success">✓ Data loaded successfully!</p>';
+                
+                const orgCount = Array.isArray(rawLCRData) ? rawLCRData.length : 1;
+                document.getElementById('stats').innerHTML = 
+                    `<p>Organizations in raw data: ${orgCount}</p>`;
+                    
+            } catch (e) {
+                document.getElementById('status').innerHTML = 
+                    `<p class="error">✗ Error loading data: ${e.message}</p>`;
+            }
+        }
+
+        function convertLCRData(rawData) {
+            if (rawData.subOrgs) {
+                return rawData;
+            }
+
+            const subOrgs = [];
+            const orgs = Array.isArray(rawData) ? rawData : [rawData];
+            
+            orgs.forEach((org, index) => {
+                if (!org.callings || org.callings.length === 0) {
+                    return;
+                }
+
+                const convertedOrg = {
+                    id: org.subOrgId || index,
+                    name: org.name || org.defaultOrgName || 'Unknown Organization',
+                    callings: []
+                };
+
+                org.callings.forEach((calling, callingIndex) => {
+                    const convertedCalling = {
+                        id: calling.positionId || callingIndex,
+                        name: calling.position || 'Unknown Position',
+                        member: null,
+                        setSustainedDate: null
+                    };
+
+                    if (calling.memberId && calling.memberName) {
+                        convertedCalling.member = {
+                            id: calling.memberId,
+                            name: calling.memberName,
+                            email: calling.memberEmail || calling.contactEmail,
+                            phone: calling.memberPhone || calling.contactMobilePhone
+                        };
+                        
+                        if (calling.activeDate) {
+                            const year = calling.activeDate.substring(0, 4);
+                            const month = calling.activeDate.substring(4, 6);
+                            const day = calling.activeDate.substring(6, 8);
+                            convertedCalling.setSustainedDate = `${year}-${month}-${day}`;
+                        } else if (calling.setApartDate) {
+                            const year = calling.setApartDate.substring(0, 4);
+                            const month = calling.setApartDate.substring(4, 6);
+                            const day = calling.setApartDate.substring(6, 8);
+                            convertedCalling.setSustainedDate = `${year}-${month}-${day}`;
+                        }
+                    }
+
+                    convertedOrg.callings.push(convertedCalling);
+                });
+
+                subOrgs.push(convertedOrg);
+            });
+
+            return { subOrgs };
+        }
+
+        function convertData() {
+            if (!rawLCRData) {
+                document.getElementById('status').innerHTML = 
+                    '<p class="error">✗ Please load data first!</p>';
+                return;
+            }
+
+            try {
+                convertedData = convertLCRData(rawLCRData);
+                
+                document.getElementById('converted-data').textContent = 
+                    JSON.stringify(convertedData, null, 2).substring(0, 2000) + '\n\n... (truncated)';
+                
+                document.getElementById('status').innerHTML = 
+                    '<p class="success">✓ Conversion successful!</p>';
+                
+                let totalCallings = 0;
+                let filledCallings = 0;
+                let vacantCallings = 0;
+                
+                convertedData.subOrgs.forEach(org => {
+                    totalCallings += org.callings.length;
+                    org.callings.forEach(calling => {
+                        if (calling.member) {
+                            filledCallings++;
+                        } else {
+                            vacantCallings++;
+                        }
+                    });
+                });
+                
+                document.getElementById('stats').innerHTML = `
+                    <p>Organizations: ${convertedData.subOrgs.length}</p>
+                    <p>Total Callings: ${totalCallings}</p>
+                    <p>Filled Callings: ${filledCallings}</p>
+                    <p>Vacant Callings: ${vacantCallings}</p>
+                    <p>First Organization: ${convertedData.subOrgs[0]?.name || 'N/A'}</p>
+                    <p>First Calling: ${convertedData.subOrgs[0]?.callings[0]?.name || 'N/A'}</p>
+                    <p>First Member: ${convertedData.subOrgs[0]?.callings[0]?.member?.name || 'N/A'}</p>
+                `;
+                
+            } catch (e) {
+                document.getElementById('status').innerHTML = 
+                    `<p class="error">✗ Conversion error: ${e.message}</p>`;
+                console.error('Conversion error:', e);
+            }
+        }
+    </script>
+</body>
+</html>
