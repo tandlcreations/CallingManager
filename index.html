@@ -20,7 +20,7 @@
 
         <main>
             <section id="home-section" class="section active">
-                <h2>TWO WAYS TO USE THIS TOOL:</h2>
+                <h2>THREE WAYS TO USE THIS TOOL:</h2>
                 
                 <div class="options-container">
                     <div class="option-card">
@@ -30,7 +30,14 @@
                     </div>
 
                     <div class="option-card">
-                        <h3>2. Copy and paste from ChurchOfJesusChrist.org</h3>
+                        <h3>2. Import previously exported data</h3>
+                        <p>Continue working with data you previously exported from this tool.</p>
+                        <button id="import-data-btn" class="primary-btn">IMPORT DATA</button>
+                        <input type="file" id="import-file-input" accept="application/json" style="display: none;" />
+                    </div>
+
+                    <div class="option-card">
+                        <h3>3. Copy and paste from ChurchOfJesusChrist.org</h3>
                         <ol>
                             <li>First, <a href="https://lcr.churchofjesuschrist.org/" target="_blank">log into LCR as you normally would</a>.</li>
                             <li>Click <a href="https://lcr.churchofjesuschrist.org/api/orgs/sub-orgs-with-callings?ip=true&lang=eng" target="_blank">this link</a> to display LCR calling data.</li>
@@ -77,11 +84,9 @@
                 <div class="toolbar">
                     <button id="back-btn" class="secondary-btn">← Back to Home</button>
                     <button id="export-btn" class="secondary-btn">Export Data</button>
-                    <button id="import-btn" class="secondary-btn">Import Data</button>
                     <button id="undo-btn" class="secondary-btn" disabled>Undo</button>
                     <input type="text" id="search-input" placeholder="Search callings or members..." />
                 </div>
-                <input type="file" id="import-file-input" accept="application/json" style="display: none;" />
 
                 <div id="callings-container" class="all-callings-container"></div>
             </section>

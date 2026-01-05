@@ -35,6 +35,14 @@ class CallingManager {
             submitDataBtn.addEventListener('click', () => this.submitData());
         }
 
+        // Import button on home page
+        const importDataBtn = document.getElementById('import-data-btn');
+        const importFileInput = document.getElementById('import-file-input');
+        if (importDataBtn && importFileInput) {
+            importDataBtn.addEventListener('click', () => importFileInput.click());
+            importFileInput.addEventListener('change', (e) => this.importData(e));
+        }
+
         // Manager section controls
         const backBtn = document.getElementById('back-btn');
         const exportBtn = document.getElementById('export-btn');
@@ -47,13 +55,6 @@ class CallingManager {
         
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportData());
-        }
-
-        const importBtn = document.getElementById('import-btn');
-        const importFileInput = document.getElementById('import-file-input');
-        if (importBtn && importFileInput) {
-            importBtn.addEventListener('click', () => importFileInput.click());
-            importFileInput.addEventListener('change', (e) => this.importData(e));
         }
 
         const undoBtn = document.getElementById('undo-btn');
@@ -1108,9 +1109,14 @@ class CallingManager {
                 this.changedCallings.clear(); // Clear changed callings
                 this.updateUndoButton();
                 this.saveData();
+                this.showManager(); // Navigate to manager section
                 this.renderAllOrganizations();
                 this.updateVisibilityLists();
-                alert('Data imported successfully!');
+                
+                // Show success message after navigation
+                setTimeout(() => {
+                    alert('Data imported successfully!');
+                }, 100);
             } catch (error) {
                 alert('Error reading file. Please ensure it\'s a valid JSON file.');
                 console.error(error);
