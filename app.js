@@ -66,6 +66,15 @@ class CallingManager {
         if (callingsDataTextarea) {
             callingsDataTextarea.addEventListener('input', () => this.updateMemberListLink());
         }
+
+        // Privacy link
+        const privacyLink = document.getElementById('privacy-link');
+        if (privacyLink) {
+            privacyLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.getElementById('privacy-modal').classList.add('active');
+            });
+        }
     }
 
     checkStoredData() {
@@ -711,6 +720,10 @@ class CallingManager {
     closeMemberModal() {
         document.getElementById('member-modal').classList.remove('active');
         this.pendingAssignment = null;
+    }
+
+    closePrivacyModal() {
+        document.getElementById('privacy-modal').classList.remove('active');
     }
 
     filterMembers(query) {

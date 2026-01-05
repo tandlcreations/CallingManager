@@ -244,6 +244,19 @@ main.panel-open {
     margin-bottom: 0.5rem;
 }
 
+.disclaimer h4 a {
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 2px dotted var(--text-primary);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.disclaimer h4 a:hover {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
 /* Manager Section Styles */
 .toolbar {
     display: flex;

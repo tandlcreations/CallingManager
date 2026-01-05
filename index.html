@@ -68,7 +68,7 @@
                 </div>
 
                 <div class="disclaimer">
-                    <h4>wait... is this okay to do?</h4>
+                    <h4><a href="#" id="privacy-link">Wait... is this okay to do?</a></h4>
                     <p>Not an official website of <a href="https://churchofjesuschrist.org/" target="_blank">The Church of Jesus Christ of Latter-day Saints</a>.</p>
                 </div>
             </section>
@@ -120,6 +120,34 @@
                         <div class="modal-actions">
                             <button onclick="window.callingManager.closeMemberModal()" class="secondary-btn">Cancel</button>
                             <button onclick="window.callingManager.showAddNewMember()" class="primary-btn">+ Add New Member</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy Policy Modal -->
+            <div id="privacy-modal" class="modal">
+                <div class="modal-content" style="max-width: 650px;">
+                    <div class="modal-header">
+                        <h2>Is This Safe to Use?</h2>
+                        <button class="close-btn" onclick="window.callingManager.closePrivacyModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="text-align: left;">
+                        <p><strong>Great question!</strong> Church policy is very clear that membership data should NOT be sent to third-party servers, websites, or cloud-based service providers.</p>
+                        
+                        <h3 style="margin-top: 20px;">Q. But aren't I submitting data to this website?</h3>
+                        <p><strong>A.</strong> While it may seem like it, the answer is <strong>NO</strong>. CallingManager.com loads an application in your web browser, but all the information you enter and the work you do with that data takes place on your local computer—similar to using a spreadsheet program or other desktop software. To get a bit more technical, this page uses client-side JavaScript code to accept, parse, and output everything. No communication with the server is necessary beyond the initial page load.</p>
+                        
+                        <h3 style="margin-top: 20px;">Q. I'm still not sure... can you prove it?</h3>
+                        <p><strong>A.</strong> Of course! Not only is all the code used to manage callings open source (you can look at all the nuts and bolts yourself if you like), there is a nice and simple way to put your mind at ease:</p>
+                        <ol style="margin-left: 20px;">
+                            <li>After loading this page, disconnect from wifi or unplug your internet connection</li>
+                            <li>Input your calling data and work offline</li>
+                            <li>When you are done and have printed your changes, close the browser and reconnect to the internet</li>
+                        </ol>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+                            <p style="margin: 0; font-size: 0.9em;"><strong>Official Church Policy:</strong> For more information about using online resources in Church callings, please review the official guidelines at <a href="https://www.churchofjesuschrist.org/tools/help/use-of-online-resources-in-church-callings?lang=eng" target="_blank">ChurchofJesusChrist.org</a>.</p>
                         </div>
                     </div>
                 </div>
