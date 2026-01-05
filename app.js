@@ -558,8 +558,8 @@ class CallingManager {
         const callingsGrid = document.createElement('div');
         callingsGrid.className = 'callings-grid';
 
-        org.callings.forEach(calling => {
-            const card = this.createCallingCard(calling, org);
+        org.callings.forEach((calling, callingIndex) => {
+            const card = this.createCallingCard(calling, org, callingIndex);
             // Add hidden class if calling is in hiddenCallings set
             if (this.hiddenCallings.has(calling.id)) {
                 card.classList.add('hidden');
@@ -600,14 +600,15 @@ class CallingManager {
         return section;
     }
 
-    createCallingCard(calling, org) {
+    createCallingCard(calling, org, callingIndex) {
         const card = document.createElement('div');
         card.className = 'calling-card';
         card.dataset.callingId = calling.id;
         card.dataset.orgId = org.id;
+        card.dataset.callingIndex = callingIndex;
         
-        // Add visual indicator for changed callings using unique identifier
-        const uniqueCallingId = `${org.id}-${calling.id}`;
+        // Add visual indicator for changed callings using unique identifier with index
+        const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
         if (this.changedCallings.has(uniqueCallingId)) {
             card.classList.add('recently-changed');
         }
@@ -623,14 +624,14 @@ class CallingManager {
             memberDiv.innerHTML = `
                 <span class="member-name">${calling.member.name}</span>
                 <div>
-                    <button class="change-btn" onclick="window.callingManager.changeMember('${org.id}', '${calling.id}')">Change</button>
-                    <button class="change-btn release-btn" onclick="window.callingManager.releaseMember('${org.id}', '${calling.id}')">Release</button>
+                    <button class="change-btn" onclick="window.callingManager.changeMember('${org.id}', '${calling.id}', ${callingIndex})">Change</button>
+                    <button class="change-btn release-btn" onclick="window.callingManager.releaseMember('${calling.id}', '${org.id}', ${callingIndex})">Release</button>
                 </div>
             `;
         } else {
             memberDiv.innerHTML = `
                 <span class="member-name vacant">VACANT</span>
-                <button class="change-btn" onclick="window.callingManager.assignMember('${org.id}', '${calling.id}')">Assign</button>
+                <button class="change-btn" onclick="window.callingManager.assignMember('${org.id}', '${calling.id}', ${callingIndex})">Assign</button>
             `;
         }
         card.appendChild(memberDiv);
@@ -686,8 +687,8 @@ class CallingManager {
         calling.activeDate = null;
         calling.setApartDate = null;
 
-        // Mark this calling as changed for visual highlighting using unique identifier
-        this.markCallingAsChanged(`${org.id}-${calling.id}`);
+        // Mark this calling as changed for visual highlighting using unique identifier with index
+        this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
 
         // If this member was in our member list, make sure they're not hidden
         if (releasedMemberName) {
@@ -712,13 +713,13 @@ class CallingManager {
         }
     }
 
-    assignMember(orgId, callingId) {
-        this.pendingAssignment = { orgId, callingId, isNew: true };
+    assignMember(orgId, callingId, callingIndex) {
+        this.pendingAssignment = { orgId, callingId, callingIndex, isNew: true };
         this.showMemberModal();
     }
 
-    changeMember(orgId, callingId) {
-        this.pendingAssignment = { orgId, callingId, isNew: false };
+    changeMember(orgId, callingId, callingIndex) {
+        this.pendingAssignment = { orgId, callingId, callingIndex, isNew: false };
         this.showMemberModal();
     }
 
@@ -772,15 +773,15 @@ class CallingManager {
     selectMember(member) {
         if (!this.pendingAssignment) return;
         
-        const { orgId, callingId, isNew } = this.pendingAssignment;
+        const { orgId, callingId, callingIndex, isNew } = this.pendingAssignment;
         const org = this.callingsData.subOrgs.find(o => o.id == orgId);
         if (!org) return;
 
-        const calling = org.callings.find(c => c.id == callingId);
-        if (!calling) return;
+        const calling = org.callings[callingIndex];
+        if (!calling || calling.id != callingId) return;
 
-        // Create unique identifier for this calling
-        const uniqueCallingId = `${org.id}-${calling.id}`;
+        // Create unique identifier for this calling including index
+        const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
 
         // Save state before making change
         const action = isNew ? 'Assign' : 'Change';
@@ -798,8 +799,8 @@ class CallingManager {
         calling.activeDate = new Date().toISOString().split('T')[0];
         calling.setApartDate = null;
 
-        // Mark this calling as changed for visual highlighting using unique identifier
-        this.markCallingAsChanged(`${org.id}-${calling.id}`);
+        // Mark this calling as changed for visual highlighting using unique identifier with index
+        this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
 
         // If member didn't have a calling before, ensure they cannot be hidden
         if (!memberHadCalling && this.hiddenMembers.has(member.id)) {
@@ -1040,12 +1041,12 @@ class CallingManager {
         this.callingsData.subOrgs.forEach(org => {
             const matchingCallings = [];
             
-            org.callings.forEach(calling => {
+            org.callings.forEach((calling, callingIndex) => {
                 const callingName = calling.name.toLowerCase();
                 const memberName = calling.member ? calling.member.name.toLowerCase() : '';
                 
                 if (callingName.includes(lowerQuery) || memberName.includes(lowerQuery)) {
-                    matchingCallings.push(calling);
+                    matchingCallings.push({ calling, callingIndex });
                 }
             });
 
@@ -1061,8 +1062,8 @@ class CallingManager {
                 const grid = document.createElement('div');
                 grid.className = 'callings-grid';
                 
-                matchingCallings.forEach(calling => {
-                    const card = this.createCallingCard(calling, org);
+                matchingCallings.forEach(({ calling, callingIndex }) => {
+                    const card = this.createCallingCard(calling, org, callingIndex);
                     grid.appendChild(card);
                 });
                 
