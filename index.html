@@ -20,7 +20,7 @@
 
         <main>
             <section id="home-section" class="section active">
-                <h2>TWO WAYS TO USE CALLINGMANAGER.COM</h2>
+                <h2>TWO WAYS TO USE THIS TOOL:</h2>
                 
                 <div class="options-container">
                     <div class="option-card">
@@ -77,8 +77,11 @@
                 <div class="toolbar">
                     <button id="back-btn" class="secondary-btn">← Back to Home</button>
                     <button id="export-btn" class="secondary-btn">Export Data</button>
+                    <button id="import-btn" class="secondary-btn">Import Data</button>
+                    <button id="undo-btn" class="secondary-btn" disabled>Undo</button>
                     <input type="text" id="search-input" placeholder="Search callings or members..." />
                 </div>
+                <input type="file" id="import-file-input" accept="application/json" style="display: none;" />
 
                 <div id="callings-container" class="all-callings-container"></div>
             </section>

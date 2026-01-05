@@ -12,6 +12,8 @@ class CallingManager {
         this.currentOrg = null;
         this.pendingAssignment = null; // Store org/calling for member selection
         this.currentTab = 'callings';
+        this.changeHistory = []; // Track changes for undo
+        this.changedCallings = new Set(); // Track which callings have been modified
         this.init();
     }
 
@@ -45,6 +47,18 @@ class CallingManager {
         
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportData());
+        }
+
+        const importBtn = document.getElementById('import-btn');
+        const importFileInput = document.getElementById('import-file-input');
+        if (importBtn && importFileInput) {
+            importBtn.addEventListener('click', () => importFileInput.click());
+            importFileInput.addEventListener('change', (e) => this.importData(e));
+        }
+
+        const undoBtn = document.getElementById('undo-btn');
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => this.undoChange());
         }
         
         if (searchInput) {
@@ -591,6 +605,11 @@ class CallingManager {
         card.dataset.callingId = calling.id;
         card.dataset.orgId = org.id;
         
+        // Add visual indicator for changed callings
+        if (this.changedCallings.has(calling.id)) {
+            card.classList.add('recently-changed');
+        }
+        
         const title = document.createElement('h4');
         title.textContent = calling.name;
         card.appendChild(title);
@@ -642,22 +661,28 @@ class CallingManager {
     }
 
     releaseMember(orgId, callingId) {
-        if (!confirm('Are you sure you want to release this member from their calling?')) {
-            return;
-        }
-
         const org = this.callingsData.subOrgs.find(o => o.id == orgId);
         if (!org) return;
 
         const calling = org.callings.find(c => c.id == callingId);
-        if (!calling) return;
+        if (!calling || !calling.member) return;
 
         // Get member info before clearing
-        const releasedMemberName = calling.member ? calling.member.name : null;
+        const releasedMemberName = calling.member.name;
+
+        if (!confirm(`Are you sure you want to release ${releasedMemberName} from ${calling.name}?`)) {
+            return;
+        }
+
+        // Save state before making change
+        this.saveStateForUndo(`Release ${releasedMemberName} from ${calling.name} in ${org.name}`);
 
         calling.member = null;
         calling.activeDate = null;
         calling.setApartDate = null;
+
+        // Mark this calling as changed for visual highlighting
+        this.markCallingAsChanged(calling.id);
 
         // If this member was in our member list, make sure they're not hidden
         if (releasedMemberName) {
@@ -742,12 +767,16 @@ class CallingManager {
     selectMember(member) {
         if (!this.pendingAssignment) return;
         
-        const { orgId, callingId } = this.pendingAssignment;
+        const { orgId, callingId, isNew } = this.pendingAssignment;
         const org = this.callingsData.subOrgs.find(o => o.id == orgId);
         if (!org) return;
 
         const calling = org.callings.find(c => c.id == callingId);
         if (!calling) return;
+
+        // Save state before making change
+        const action = isNew ? 'Assign' : 'Change';
+        this.saveStateForUndo(`${action} ${member.name} to ${calling.name} in ${org.name}`);
 
         // Check if member previously had a calling
         const memberHadCalling = this.callingsData.subOrgs.some(org => 
@@ -760,6 +789,9 @@ class CallingManager {
         };
         calling.activeDate = new Date().toISOString().split('T')[0];
         calling.setApartDate = null;
+
+        // Mark this calling as changed for visual highlighting
+        this.markCallingAsChanged(calling.id);
 
         // If member didn't have a calling before, ensure they cannot be hidden
         if (!memberHadCalling && this.hiddenMembers.has(member.id)) {
@@ -1054,6 +1086,93 @@ class CallingManager {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                
+                // Validate the imported data structure
+                if (!importedData.subOrgs || !Array.isArray(importedData.subOrgs)) {
+                    alert('Invalid data format. Please import a valid calling data file.');
+                    return;
+                }
+
+                this.callingsData = importedData;
+                this.changeHistory = []; // Reset history when importing new data
+                this.changedCallings.clear(); // Clear changed callings
+                this.updateUndoButton();
+                this.saveData();
+                this.renderAllOrganizations();
+                this.updateVisibilityLists();
+                alert('Data imported successfully!');
+            } catch (error) {
+                alert('Error reading file. Please ensure it\'s a valid JSON file.');
+                console.error(error);
+            }
+        };
+        reader.readAsText(file);
+        
+        // Reset file input so same file can be imported again
+        event.target.value = '';
+    }
+
+    saveStateForUndo(description) {
+        // Deep clone the current state
+        const state = {
+            data: JSON.stringify(this.callingsData),
+            description: description,
+            timestamp: new Date().toISOString()
+        };
+        
+        this.changeHistory.push(state);
+        
+        // Limit history to last 20 changes to avoid memory issues
+        if (this.changeHistory.length > 20) {
+            this.changeHistory.shift();
+        }
+        
+        this.updateUndoButton();
+    }
+
+    undoChange() {
+        if (this.changeHistory.length === 0) {
+            alert('No changes to undo');
+            return;
+        }
+
+        const previousState = this.changeHistory.pop();
+        this.callingsData = JSON.parse(previousState.data);
+        
+        this.updateUndoButton();
+        this.saveData();
+        this.renderAllOrganizations();
+        this.updateVisibilityLists();
+        
+        // Show what was undone
+        alert(`Undone: ${previousState.description}`);
+    }
+
+    updateUndoButton() {
+        const undoBtn = document.getElementById('undo-btn');
+        if (undoBtn) {
+            undoBtn.disabled = this.changeHistory.length === 0;
+            if (this.changeHistory.length > 0) {
+                const lastChange = this.changeHistory[this.changeHistory.length - 1];
+                undoBtn.title = `Undo: ${lastChange.description}`;
+            } else {
+                undoBtn.title = 'No changes to undo';
+            }
+        }
+    }
+
+    markCallingAsChanged(callingId) {
+        this.changedCallings.add(callingId);
     }
 }
 
