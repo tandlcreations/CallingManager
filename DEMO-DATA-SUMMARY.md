@@ -67,16 +67,16 @@ The demo data has been significantly expanded to provide a more comprehensive an
 
 ### Out of Unit Callings:
 14. **Out of Unit Callings** (3 stake callings)
-    - Stake Presidency Second Counselor (Matt Anderson)
-    - Stake Building Specialist (Joe Hanson)
-    - Stake High Councilor (Robert Peterson)
+    - Stake Presidency Second Counselor (George Albert Smith)
+    - Stake Building Specialist (Joseph F. Smith)
+    - Stake High Councilor (Hyrum Smith)
 
 ## Total Callings: ~80 positions
 - **Filled callings**: ~65
 - **Vacant callings**: ~15
 - Includes nested organizations up to 3 levels deep (e.g., Aaronic Priesthood Quorums → Presidency → Priests Quorum Presidency)
 
-## Expanded Member List (62 total, up from 26)
+## Expanded Member List (65 total, up from 26)
 
 ### Categories of Members:
 
@@ -106,7 +106,11 @@ The demo data has been significantly expanded to provide a more comprehensive an
    - Samuel the Lamanite (age 17)
    - These demonstrate the auto-hide feature for youth without callings
 
-6. **Additional Members Without Callings** (8 members)
+6. **Out of Unit Members** (3 members with stake callings)
+   - George Albert Smith, Joseph F. Smith, Hyrum Smith
+   - These demonstrate out-of-unit calling integration
+
+7. **Additional Members Without Callings** (8 members)
    - Provides realistic "Members Without Callings" demonstration
    - Includes: Parley P. Pratt, Elizabeth Young, etc.
 
@@ -123,20 +127,12 @@ The demo data has been significantly expanded to provide a more comprehensive an
 
 ## Technical Implementation
 
-- All data embedded directly in `app.js` to avoid CORS issues
+- All demo data embedded directly in `app.js` `loadDemoData()` function to avoid CORS issues
 - Proper LCR data format with nested children arrays
 - ISO date handling for out-of-unit callings
 - Realistic member data with proper nameFormats structure
 - Ages range from 16 to 55 years old
-
-## File Structure
-
-- `app.js`: Contains embedded demo data in `loadDemoData()` function
-- `demo-callings.json`: Reference file (not loaded, for documentation)
-- `demo-members.json`: Reference file (not loaded, for documentation)
-- `build-demo-data.js`: Script that generated the structured demo data
-- `generate-demo-data.py`: Python script to output minified JSON
-- `expanded-demo-data.txt`: Generated minified JSON for embedding
+- Member visibility automatically disabled when assigned to a calling
 
 ## Usage
 
@@ -144,7 +140,7 @@ To load demo data:
 1. Open the application
 2. Click "Load Demo Data" button
 3. Explore 13 organizations with ~80 callings
-4. Test member assignment with 62 members
+4. Test member assignment with 65 members
 5. View "Out of Unit Callings" organization
 6. Check "Members Without Callings" to see available members (18+ only)
 
