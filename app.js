@@ -676,8 +676,11 @@ class CallingManager {
             return;
         }
 
+        // Create unique identifier for this calling
+        const uniqueCallingId = `${org.id}-${calling.id}`;
+
         // Save state before making change
-        this.saveStateForUndo(`Release ${releasedMemberName} from ${calling.name} in ${org.name}`);
+        this.saveStateForUndo(`Release ${releasedMemberName} from ${calling.name} in ${org.name}`, uniqueCallingId);
 
         calling.member = null;
         calling.activeDate = null;
@@ -776,9 +779,12 @@ class CallingManager {
         const calling = org.callings.find(c => c.id == callingId);
         if (!calling) return;
 
+        // Create unique identifier for this calling
+        const uniqueCallingId = `${org.id}-${calling.id}`;
+
         // Save state before making change
         const action = isNew ? 'Assign' : 'Change';
-        this.saveStateForUndo(`${action} ${member.name} to ${calling.name} in ${org.name}`);
+        this.saveStateForUndo(`${action} ${member.name} to ${calling.name} in ${org.name}`, uniqueCallingId);
 
         // Check if member previously had a calling
         const memberHadCalling = this.callingsData.subOrgs.some(org => 
@@ -1129,11 +1135,12 @@ class CallingManager {
         event.target.value = '';
     }
 
-    saveStateForUndo(description) {
+    saveStateForUndo(description, callingId = null) {
         // Deep clone the current state
         const state = {
             data: JSON.stringify(this.callingsData),
             description: description,
+            callingId: callingId, // Store the calling ID that was changed
             timestamp: new Date().toISOString()
         };
         
@@ -1156,9 +1163,10 @@ class CallingManager {
         const previousState = this.changeHistory.pop();
         this.callingsData = JSON.parse(previousState.data);
         
-        // Clear the last changed calling from the set
-        // Since we're restoring previous state, we need to re-render to remove styling
-        this.changedCallings.clear();
+        // Remove only the specific calling that was changed from the styled set
+        if (previousState.callingId) {
+            this.changedCallings.delete(previousState.callingId);
+        }
         
         this.updateUndoButton();
         this.saveData();
