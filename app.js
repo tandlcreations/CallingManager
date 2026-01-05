@@ -606,8 +606,9 @@ class CallingManager {
         card.dataset.callingId = calling.id;
         card.dataset.orgId = org.id;
         
-        // Add visual indicator for changed callings
-        if (this.changedCallings.has(calling.id)) {
+        // Add visual indicator for changed callings using unique identifier
+        const uniqueCallingId = `${org.id}-${calling.id}`;
+        if (this.changedCallings.has(uniqueCallingId)) {
             card.classList.add('recently-changed');
         }
         
@@ -682,8 +683,8 @@ class CallingManager {
         calling.activeDate = null;
         calling.setApartDate = null;
 
-        // Mark this calling as changed for visual highlighting
-        this.markCallingAsChanged(calling.id);
+        // Mark this calling as changed for visual highlighting using unique identifier
+        this.markCallingAsChanged(`${org.id}-${calling.id}`);
 
         // If this member was in our member list, make sure they're not hidden
         if (releasedMemberName) {
@@ -791,8 +792,8 @@ class CallingManager {
         calling.activeDate = new Date().toISOString().split('T')[0];
         calling.setApartDate = null;
 
-        // Mark this calling as changed for visual highlighting
-        this.markCallingAsChanged(calling.id);
+        // Mark this calling as changed for visual highlighting using unique identifier
+        this.markCallingAsChanged(`${org.id}-${calling.id}`);
 
         // If member didn't have a calling before, ensure they cannot be hidden
         if (!memberHadCalling && this.hiddenMembers.has(member.id)) {
@@ -1154,6 +1155,10 @@ class CallingManager {
 
         const previousState = this.changeHistory.pop();
         this.callingsData = JSON.parse(previousState.data);
+        
+        // Clear the last changed calling from the set
+        // Since we're restoring previous state, we need to re-render to remove styling
+        this.changedCallings.clear();
         
         this.updateUndoButton();
         this.saveData();
