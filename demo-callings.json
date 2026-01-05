@@ -1,0 +1,69 @@
+[
+  {
+    "unitNumber": 100001,
+    "unitType": 7,
+    "subOrgId": 1,
+    "parentSubOrgId": null,
+    "parentName": "Bishopric",
+    "name": "Bishopric",
+    "children": [],
+    "callings": [
+      {
+        "positionId": 101,
+        "position": "Bishop",
+        "memberId": 1001,
+        "memberName": "Smith, Joseph",
+        "activeDate": "20240115",
+        "setApartDate": "20240115"
+      },
+      {
+        "positionId": 102,
+        "position": "First Counselor",
+        "memberId": 1002,
+        "memberName": "Young, Brigham",
+        "activeDate": "20240115",
+        "setApartDate": "20240115"
+      },
+      {
+        "positionId": 103,
+        "position": "Second Counselor",
+        "memberId": 1003,
+        "memberName": "Cowdery, Oliver",
+        "activeDate": "20240115",
+        "setApartDate": "20240115"
+      },
+      {
+        "positionId": 104,
+        "position": "Executive Secretary",
+        "memberId": 1004,
+        "memberName": "Kimball, Heber C.",
+        "activeDate": "20240210",
+        "setApartDate": "20240210"
+      },
+      {
+        "positionId": 105,
+        "position": "Ward Clerk",
+        "memberId": 1005,
+        "memberName": "Richards, Willard",
+        "activeDate": "20240210",
+        "setApartDate": "20240210"
+      },
+      {
+        "positionId": 106,
+        "position": "Assistant Ward Clerk--Finance",
+        "memberId": 1006,
+        "memberName": "Grant, Heber J.",
+        "activeDate": "20240210",
+        "setApartDate": "20240210"
+      },
+      {
+        "positionId": 107,
+        "position": "Assistant Ward Clerk--Membership",
+        "memberId": null,
+        "memberName": null,
+        "activeDate": null,
+        "setApartDate": null
+      }
+    ]
+  }
+]

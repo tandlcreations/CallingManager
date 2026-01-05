@@ -1,7 +1,8 @@
-# Temporary data files
+# Temporary data files (user's ward data - keep private)
 temp.json
 temp-memberlist.json
 temp-outofunitcallings.json
+temp*.json
 
 # System files
 .DS_Store
