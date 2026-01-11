@@ -85,6 +85,7 @@
                     <button id="back-btn" class="secondary-btn">← Back to Home</button>
                     <button id="export-btn" class="secondary-btn">Export Data</button>
                     <button id="undo-btn" class="secondary-btn" disabled>Undo</button>
+                    <button id="print-changes-btn" class="secondary-btn" disabled>Print Changes</button>
                     <input type="text" id="search-input" placeholder="Search callings or members..." />
                 </div>
 
@@ -167,6 +168,20 @@
         </footer>
     </div>
 
+    <!-- Print Changes Modal -->
+    <div id="print-changes-modal" class="modal">
+        <div class="modal-content print-modal-content">
+            <span class="close" onclick="window.callingManager.closePrintChanges()">&times;</span>
+            <div id="print-changes-content">
+                <h2>Calling Changes Report</h2>
+                <div id="changes-list"></div>
+            </div>
+            <div class="modal-actions no-print">
+                <button class="primary-btn" onclick="window.print()">Print</button>
+                <button class="secondary-btn" onclick="window.callingManager.closePrintChanges()">Close</button>
+            </div>
+        </div>
+    </div>
     <script src="app.js"></script>
 </body>
 </html>

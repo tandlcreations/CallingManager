@@ -61,6 +61,11 @@ class CallingManager {
         if (undoBtn) {
             undoBtn.addEventListener('click', () => this.undoChange());
         }
+
+        const printChangesBtn = document.getElementById('print-changes-btn');
+        if (printChangesBtn) {
+            printChangesBtn.addEventListener('click', () => this.showPrintChanges());
+        }
         
         if (searchInput) {
             searchInput.addEventListener('input', (e) => this.searchCallings(e.target.value));
@@ -1189,6 +1194,55 @@ class CallingManager {
                 undoBtn.title = 'No changes to undo';
             }
         }
+
+        // Update print changes button
+        const printChangesBtn = document.getElementById('print-changes-btn');
+        if (printChangesBtn) {
+            printChangesBtn.disabled = this.changeHistory.length === 0;
+            if (this.changeHistory.length > 0) {
+                printChangesBtn.title = `Print ${this.changeHistory.length} change${this.changeHistory.length === 1 ? '' : 's'}`;
+            } else {
+                printChangesBtn.title = 'No changes to print';
+            }
+        }
+    }
+
+    showPrintChanges() {
+        if (this.changeHistory.length === 0) {
+            alert('No changes have been made yet.');
+            return;
+        }
+
+        const modal = document.getElementById('print-changes-modal');
+        const changesList = document.getElementById('changes-list');
+        
+        // Build the changes report
+        let html = '<div class="changes-report">';
+        html += `<p class="report-date">Generated: ${new Date().toLocaleString()}</p>`;
+        html += `<p class="report-summary">Total Changes: ${this.changeHistory.length}</p>`;
+        html += '<table class="changes-table">';
+        html += '<thead><tr><th>#</th><th>Date/Time</th><th>Change Description</th></tr></thead>';
+        html += '<tbody>';
+        
+        this.changeHistory.forEach((change, index) => {
+            const changeDate = new Date(change.timestamp);
+            const formattedDate = changeDate.toLocaleString();
+            html += `<tr>
+                <td>${index + 1}</td>
+                <td>${formattedDate}</td>
+                <td>${change.description}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+        
+        changesList.innerHTML = html;
+        modal.classList.add('active');
+    }
+
+    closePrintChanges() {
+        const modal = document.getElementById('print-changes-modal');
+        modal.classList.remove('active');
     }
 
     markCallingAsChanged(callingId) {
