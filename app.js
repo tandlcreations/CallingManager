@@ -668,12 +668,12 @@ class CallingManager {
         return card;
     }
 
-    releaseMember(orgId, callingId) {
+    releaseMember(callingId, orgId, callingIndex) {
         const org = this.callingsData.subOrgs.find(o => o.id == orgId);
         if (!org) return;
 
-        const calling = org.callings.find(c => c.id == callingId);
-        if (!calling || !calling.member) return;
+        const calling = org.callings[callingIndex];
+        if (!calling || calling.id != callingId || !calling.member) return;
 
         // Get member info before clearing
         const releasedMemberName = calling.member.name;
