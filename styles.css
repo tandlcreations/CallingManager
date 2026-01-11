@@ -868,17 +868,24 @@ footer {
         display: none !important;
     }
 
+    /* Hide everything except the print modal */
+    body > .container,
     header,
     .toolbar,
     .modal-actions,
-    .close {
+    .close,
+    main,
+    .side-panel {
         display: none !important;
     }
 
-    .modal {
+    /* Show only the print changes modal */
+    #print-changes-modal {
         display: block !important;
         position: static;
         background: white;
+        width: 100%;
+        height: auto;
     }
 
     .modal-content {
@@ -886,6 +893,7 @@ footer {
         max-width: 100%;
         width: 100%;
         max-height: none;
+        border-radius: 0;
     }
 
     #print-changes-content {
