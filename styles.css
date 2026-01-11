@@ -115,9 +115,21 @@ main.panel-open {
 /* Options Container */
 .options-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: 1fr;
     gap: 2rem;
     margin: 2rem 0;
+}
+
+/* On larger screens, make first two options side-by-side */
+@media (min-width: 900px) {
+    .options-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    /* Third option (LCR paste) spans both columns */
+    .option-card:nth-child(3) {
+        grid-column: 1 / -1;
+    }
 }
 
 .option-card {
@@ -125,12 +137,19 @@ main.panel-open {
     padding: 2rem;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
 }
 
 .option-card h3 {
     color: var(--primary-color);
     margin-bottom: 1rem;
     font-size: 1.3rem;
+}
+
+.option-card p {
+    flex-grow: 1;
+    margin-bottom: 1rem;
 }
 
 .option-card ol {
@@ -144,6 +163,10 @@ main.panel-open {
 
 .option-card ol ol {
     margin-top: 0.5rem;
+}
+
+.option-card .primary-btn {
+    margin-top: auto;
 }
 
 /* Form Styles */
@@ -461,10 +484,6 @@ footer {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    .options-container {
-        grid-template-columns: 1fr;
-    }
-    
     .callings-grid {
         grid-template-columns: 1fr;
     }
