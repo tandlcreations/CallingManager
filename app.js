@@ -788,9 +788,17 @@ class CallingManager {
         // Create unique identifier for this calling including index
         const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
 
+        // Create description showing both old and new members if this is a change
+        let description;
+        if (isNew) {
+            description = `Assign ${member.name} to ${calling.name} in ${org.name}`;
+        } else {
+            const previousMember = calling.member ? calling.member.name : 'Unknown';
+            description = `Change ${calling.name} in ${org.name}: ${previousMember} → ${member.name}`;
+        }
+
         // Save state before making change
-        const action = isNew ? 'Assign' : 'Change';
-        this.saveStateForUndo(`${action} ${member.name} to ${calling.name} in ${org.name}`, uniqueCallingId);
+        this.saveStateForUndo(description, uniqueCallingId);
 
         // Check if member previously had a calling
         const memberHadCalling = this.callingsData.subOrgs.some(org => 
