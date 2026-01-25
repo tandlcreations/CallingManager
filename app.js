@@ -478,11 +478,19 @@ class CallingManager {
         document.getElementById('home-section').classList.add('active');
         document.getElementById('manager-section').classList.remove('active');
         document.getElementById('search-input').value = '';
+        
+        // Hide toolbar and visibility button when on home
+        document.getElementById('main-toolbar').style.display = 'none';
+        document.getElementById('toggle-visibility-btn').classList.remove('visible');
     }
 
     showManager() {
         document.getElementById('home-section').classList.remove('active');
         document.getElementById('manager-section').classList.add('active');
+        
+        // Show toolbar and visibility button when on manager
+        document.getElementById('main-toolbar').style.display = 'flex';
+        document.getElementById('toggle-visibility-btn').classList.add('visible');
         
         // Auto-hide members under 18 without callings on initial load
         this.autoHideYouthWithoutCallings();
