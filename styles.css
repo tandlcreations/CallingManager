@@ -298,6 +298,126 @@ main.panel-open {
     border-bottom-color: var(--primary-color);
 }
 
+/* Scenario Tabs */
+.scenario-tabs {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.1);
+    padding: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.tabs-container {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.scenario-tab {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+    font-size: 1rem;
+}
+
+.scenario-tab:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+.scenario-tab.active {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: 600;
+}
+
+.scenario-tab .tab-name {
+    flex: 1;
+    cursor: pointer;
+}
+
+.scenario-tab .edit-tab {
+    display: none;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.6;
+    flex-shrink: 0;
+    margin-left: 0.25rem;
+}
+
+.scenario-tab:hover .edit-tab {
+    display: block;
+}
+
+.scenario-tab .edit-tab:hover {
+    opacity: 1;
+}
+
+.scenario-tab .edit-tab svg {
+    width: 16px;
+    height: 16px;
+}
+
+.scenario-tab .close-tab {
+    display: none;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.scenario-tab:hover .close-tab {
+    display: block;
+}
+
+.scenario-tab .close-tab:hover {
+    opacity: 1;
+}
+
+.scenario-tab .close-tab svg {
+    width: 18px;
+    height: 18px;
+}
+
+.add-scenario-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: white;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.add-scenario-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
 /* Manager Section Styles */
 header .toolbar {
     display: flex;
@@ -490,6 +610,11 @@ header .toolbar input[type="text"]:focus {
     font-weight: 600;
 }
 
+.calling-card .details .pending {
+    color: #17a2b8;
+    font-weight: 600;
+}
+
 .calling-card.member-card {
     background: linear-gradient(135deg, #f5f7fa 0%, #e8ebf0 100%);
     border-left: 4px solid var(--secondary-color);
@@ -553,6 +678,20 @@ footer {
         flex: 1;
         min-width: 100px;
         font-size: 0.9rem;
+        padding: 0.5rem;
+    }
+    
+    .scenario-tabs {
+        flex-wrap: nowrap;
+    }
+    
+    .scenario-tab {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        min-width: 80px;
+    }
+    
+    .add-scenario-btn {
         padding: 0.5rem;
     }
     

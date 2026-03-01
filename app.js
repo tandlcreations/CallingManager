@@ -3,6 +3,11 @@
 
 class CallingManager {
     constructor() {
+        this.originalData = null; // Store the original loaded data
+        this.scenarios = []; // Array of scenarios, each with its own data
+        this.currentScenarioId = null;
+        this.nextScenarioId = 1;
+        
         this.callingsData = null;
         this.outOfUnitData = null;
         this.memberList = [];
@@ -73,6 +78,12 @@ class CallingManager {
         
         if (toggleVisibilityBtn) {
             toggleVisibilityBtn.addEventListener('click', () => this.showVisibilityModal());
+        }
+
+        // Scenario management
+        const addScenarioBtn = document.getElementById('add-scenario-btn');
+        if (addScenarioBtn) {
+            addScenarioBtn.addEventListener('click', () => this.addScenario());
         }
 
         // Member search
@@ -324,9 +335,6 @@ class CallingManager {
     }
 
     convertLCRData(rawData) {
-    }
-
-    convertLCRData(rawData) {
         // Check if data is already in our format
         if (rawData.subOrgs) {
             return rawData;
@@ -479,9 +487,10 @@ class CallingManager {
         document.getElementById('manager-section').classList.remove('active');
         document.getElementById('search-input').value = '';
         
-        // Hide toolbar and visibility button when on home
+        // Hide toolbar, visibility button, and scenario tabs when on home
         document.getElementById('main-toolbar').style.display = 'none';
         document.getElementById('toggle-visibility-btn').classList.remove('visible');
+        document.getElementById('scenario-tabs').style.display = 'none';
     }
 
     showManager() {
@@ -491,6 +500,17 @@ class CallingManager {
         // Show toolbar and visibility button when on manager
         document.getElementById('main-toolbar').style.display = 'flex';
         document.getElementById('toggle-visibility-btn').classList.add('visible');
+        document.getElementById('scenario-tabs').style.display = 'flex';
+        
+        // Initialize scenarios if this is the first time
+        if (this.scenarios.length === 0) {
+            // Only set originalData if it hasn't been set yet (preserve the first data load)
+            if (!this.originalData) {
+                this.originalData = JSON.parse(JSON.stringify(this.callingsData));
+            }
+            // Pass true to preserve current changeHistory and changedCallings (for imports)
+            this.createScenario('Scenario 1', true);
+        }
         
         // Auto-hide members under 18 without callings on initial load
         this.autoHideYouthWithoutCallings();
@@ -622,7 +642,8 @@ class CallingManager {
         
         // Add visual indicator for changed callings using unique identifier with index
         const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
-        if (this.changedCallings.has(uniqueCallingId)) {
+        const isChanged = this.changedCallings.has(uniqueCallingId);
+        if (isChanged) {
             card.classList.add('recently-changed');
         }
         
@@ -650,24 +671,32 @@ class CallingManager {
         card.appendChild(memberDiv);
 
         // Show date information if member is assigned
-        if (calling.member && calling.activeDate) {
+        if (calling.member) {
             const details = document.createElement('div');
             details.className = 'details';
             
-            const activeDate = new Date(calling.activeDate);
-            const formattedDate = activeDate.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
+            let sustainedText, daysText;
             
-            const daysSince = Math.floor((new Date() - activeDate) / (1000 * 60 * 60 * 24));
+            if (!calling.activeDate) {
+                // No sustained date set
+                sustainedText = isChanged ? 'Pending' : 'Not set';
+                daysText = '-';
+            } else {
+                // Has sustained date
+                const activeDate = new Date(calling.activeDate);
+                sustainedText = activeDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                daysText = Math.floor((new Date() - activeDate) / (1000 * 60 * 60 * 24));
+            }
             
             const setApartStatus = calling.setApartDate ? '✓ Set Apart' : '⚠️ Not Set Apart';
             
             details.innerHTML = `
-                <span>Sustained: ${formattedDate}</span>
-                <span>Days: ${daysSince}</span>
+                <span>Sustained: ${sustainedText}</span>
+                <span>Days: ${daysText}</span>
                 <span class="${calling.setApartDate ? 'set-apart' : 'not-set-apart'}">${setApartStatus}</span>
             `;
             card.appendChild(details);
@@ -796,29 +825,29 @@ class CallingManager {
         // Create unique identifier for this calling including index
         const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
 
-        // Create description showing both old and new members if this is a change
-        let description;
-        if (isNew) {
-            description = `Assign ${member.name} to ${calling.name} in ${org.name}`;
-        } else {
-            const previousMember = calling.member ? calling.member.name : 'Unknown';
-            description = `Change ${calling.name} in ${org.name}: ${previousMember} → ${member.name}`;
-        }
-
-        // Save state before making change
-        this.saveStateForUndo(description, uniqueCallingId);
+        // Save descriptions for change history
+        const previousMember = calling.member ? calling.member.name : null;
+        const releaseDescription = previousMember ? `Release ${previousMember} from ${calling.name} in ${org.name}` : null;
+        const callDescription = `Call ${member.name} to ${calling.name} in ${org.name}`;
 
         // Check if member previously had a calling
         const memberHadCalling = this.callingsData.subOrgs.some(org => 
             org.callings.some(c => c.member && c.member.id === member.id)
         );
 
+        // Update the calling
         calling.member = {
             id: member.id,
             name: member.name
         };
-        calling.activeDate = new Date().toISOString().split('T')[0];
+        calling.activeDate = null; // Leave sustained date blank (pending)
         calling.setApartDate = null;
+
+        // Record the changes (release first if applicable, then call)
+        if (releaseDescription) {
+            this.recordChange(releaseDescription, uniqueCallingId);
+        }
+        this.recordChange(callDescription, uniqueCallingId);
 
         // Mark this calling as changed for visual highlighting using unique identifier with index
         this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
@@ -1105,17 +1134,40 @@ class CallingManager {
             return;
         }
 
-        const dataStr = JSON.stringify(this.callingsData, null, 2);
+        console.time('Export Total');
+        
+        const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
+        const scenarioName = currentScenario ? currentScenario.name : 'scenario';
+        const safeName = scenarioName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+        
+        // Export complete data including member list and change history
+        const exportData = {
+            callingsData: this.callingsData,
+            memberList: this.memberList,
+            changeHistory: this.changeHistory,
+            changedCallings: Array.from(this.changedCallings)
+        };
+        
+        console.time('JSON.stringify');
+        const dataStr = JSON.stringify(exportData);
+        console.timeEnd('JSON.stringify');
+        console.log('Data size:', (dataStr.length / 1024).toFixed(2), 'KB');
+        
+        console.time('Create blob and download');
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = `calling-data-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
+        a.download = `calling-data-${safeName}-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        console.timeEnd('Create blob and download');
+        
+        // Clean up after a brief delay
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+            console.timeEnd('Export Total');
+        }, 100);
     }
 
     importData(event) {
@@ -1127,15 +1179,41 @@ class CallingManager {
             try {
                 const importedData = JSON.parse(e.target.result);
                 
-                // Validate the imported data structure
-                if (!importedData.subOrgs || !Array.isArray(importedData.subOrgs)) {
-                    alert('Invalid data format. Please import a valid calling data file.');
-                    return;
+                // Check if this is the new format (with memberList) or old format (just callings)
+                if (importedData.callingsData) {
+                    // New format
+                    if (!importedData.callingsData.subOrgs || !Array.isArray(importedData.callingsData.subOrgs)) {
+                        alert('Invalid data format. Please import a valid calling data file.');
+                        return;
+                    }
+                    
+                    this.callingsData = importedData.callingsData;
+                    this.memberList = importedData.memberList || [];
+                    this.changeHistory = importedData.changeHistory || [];
+                    this.changedCallings = new Set(importedData.changedCallings || []);
+                } else {
+                    // Old format (just callings data)
+                    if (!importedData.subOrgs || !Array.isArray(importedData.subOrgs)) {
+                        alert('Invalid data format. Please import a valid calling data file.');
+                        return;
+                    }
+                    
+                    this.callingsData = importedData;
+                    // Member list will remain empty, user will need to re-import from LCR or use demo
+                    this.changeHistory = [];
+                    this.changedCallings.clear();
                 }
-
-                this.callingsData = importedData;
-                this.changeHistory = []; // Reset history when importing new data
-                this.changedCallings.clear(); // Clear changed callings
+                
+                // If scenarios already exist, update the current scenario instead of creating new ones
+                if (this.scenarios.length > 0 && this.currentScenarioId !== null) {
+                    const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
+                    if (currentScenario) {
+                        currentScenario.data = JSON.parse(JSON.stringify(this.callingsData));
+                        currentScenario.changeHistory = [...this.changeHistory];
+                        currentScenario.changedCallings = new Set(this.changedCallings);
+                    }
+                }
+                
                 this.updateUndoButton();
                 this.saveData();
                 this.showManager(); // Navigate to manager section
@@ -1155,6 +1233,18 @@ class CallingManager {
         
         // Reset file input so same file can be imported again
         event.target.value = '';
+    }
+
+    recordChange(description, callingId = null) {
+        // Record a change without saving state (for multiple changes in one action)
+        const change = {
+            description: description,
+            callingId: callingId,
+            timestamp: new Date().toISOString()
+        };
+        
+        this.changeHistory.push(change);
+        this.updateUndoButton();
     }
 
     saveStateForUndo(description, callingId = null) {
@@ -1263,6 +1353,145 @@ class CallingManager {
 
     markCallingAsChanged(callingId) {
         this.changedCallings.add(callingId);
+    }
+
+    // Scenario Management Methods
+    createScenario(name, preserveState = false) {
+        const scenario = {
+            id: this.nextScenarioId++,
+            name: name,
+            // Always create from a fresh copy of originalData to avoid any reference issues
+            data: JSON.parse(JSON.stringify(this.originalData)),
+            changeHistory: preserveState ? [...this.changeHistory] : [],
+            changedCallings: preserveState ? new Set(this.changedCallings) : new Set()
+        };
+        
+        this.scenarios.push(scenario);
+        this.switchToScenario(scenario.id);
+        this.renderScenarioTabs();
+        
+        return scenario;
+    }
+
+    addScenario() {
+        const scenarioNumber = this.scenarios.length + 1;
+        const name = prompt('Enter name for new scenario:', `Scenario ${scenarioNumber}`);
+        
+        if (name && name.trim()) {
+            this.createScenario(name.trim());
+        }
+    }
+
+    switchToScenario(scenarioId) {
+        const scenario = this.scenarios.find(s => s.id === scenarioId);
+        if (!scenario) return;
+        
+        // Save current scenario state if there is one
+        if (this.currentScenarioId !== null) {
+            const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
+            if (currentScenario) {
+                currentScenario.data = JSON.parse(JSON.stringify(this.callingsData));
+                currentScenario.changeHistory = [...this.changeHistory];
+                currentScenario.changedCallings = new Set(this.changedCallings);
+            }
+        }
+        
+        // Load new scenario
+        this.currentScenarioId = scenarioId;
+        this.callingsData = JSON.parse(JSON.stringify(scenario.data));
+        this.changeHistory = [...scenario.changeHistory];
+        this.changedCallings = new Set(scenario.changedCallings);
+        
+        // Update UI
+        this.renderScenarioTabs();
+        this.renderAllOrganizations();
+        this.updateUndoButton();
+    }
+
+    removeScenario(scenarioId) {
+        if (this.scenarios.length === 1) {
+            alert('Cannot remove the last scenario');
+            return;
+        }
+        
+        const index = this.scenarios.findIndex(s => s.id === scenarioId);
+        if (index === -1) return;
+        
+        const confirmed = confirm(`Remove "${this.scenarios[index].name}"?`);
+        if (!confirmed) return;
+        
+        this.scenarios.splice(index, 1);
+        
+        // Switch to another scenario if the current one was removed
+        if (this.currentScenarioId === scenarioId) {
+            this.switchToScenario(this.scenarios[0].id);
+        } else {
+            this.renderScenarioTabs();
+        }
+    }
+
+    renameScenario(scenarioId) {
+        const scenario = this.scenarios.find(s => s.id === scenarioId);
+        if (!scenario) return;
+        
+        const newName = prompt('Enter new name:', scenario.name);
+        if (newName && newName.trim()) {
+            scenario.name = newName.trim();
+            this.renderScenarioTabs();
+        }
+    }
+
+    renderScenarioTabs() {
+        const container = document.getElementById('tabs-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        this.scenarios.forEach(scenario => {
+            const tab = document.createElement('button');
+            tab.className = 'scenario-tab';
+            if (scenario.id === this.currentScenarioId) {
+                tab.classList.add('active');
+            }
+            
+            const tabName = document.createElement('span');
+            tabName.className = 'tab-name';
+            tabName.textContent = scenario.name;
+            tabName.title = 'Double-click to rename';
+            tabName.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                this.renameScenario(scenario.id);
+            });
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-tab';
+            editBtn.title = 'Rename scenario';
+            editBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.renameScenario(scenario.id);
+            });
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'close-tab';
+            closeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeScenario(scenario.id);
+            });
+            
+            tab.appendChild(tabName);
+            tab.appendChild(editBtn);
+            tab.appendChild(closeBtn);
+            
+            tab.addEventListener('click', () => {
+                if (scenario.id !== this.currentScenarioId) {
+                    this.switchToScenario(scenario.id);
+                }
+            });
+            
+            container.appendChild(tab);
+        });
     }
 }
 
