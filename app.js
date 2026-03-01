@@ -588,20 +588,190 @@ class CallingManager {
             return section;
         }
 
-        const callingsGrid = document.createElement('div');
-        callingsGrid.className = 'callings-grid';
+        // Build LCR-style table
+        const table = document.createElement('table');
+        table.className = 'callings-table';
 
+        // Table header
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr>
+                <th>Calling</th>
+                <th>Name</th>
+                <th>Sustained</th>
+                <th>Set Apart</th>
+                <th></th>
+            </tr>
+        `;
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        let visibleCount = 0;
         org.callings.forEach((calling, callingIndex) => {
-            const card = this.createCallingCard(calling, org, callingIndex);
-            // Add hidden class if calling is in hiddenCallings set
+            const row = this.createCallingRow(calling, org, callingIndex);
             if (this.hiddenCallings.has(calling.id)) {
-                card.classList.add('hidden');
+                row.classList.add('hidden');
+            } else {
+                visibleCount++;
             }
-            callingsGrid.appendChild(card);
+            tbody.appendChild(row);
         });
 
-        section.appendChild(callingsGrid);
+        table.appendChild(tbody);
+        section.appendChild(table);
+
+        // Count line (like LCR: "Count: 4 (filtered from 5 total)")
+        const countDiv = document.createElement('div');
+        countDiv.className = 'org-count';
+        const totalCount = org.callings.length;
+        if (visibleCount < totalCount) {
+            countDiv.textContent = `Count: ${visibleCount} (filtered from ${totalCount} total)`;
+        } else {
+            countDiv.textContent = `Count: ${totalCount}`;
+        }
+        section.appendChild(countDiv);
+
         return section;
+    }
+
+    createCallingRow(calling, org, callingIndex) {
+        const row = document.createElement('tr');
+        row.dataset.callingId = calling.id;
+        row.dataset.orgId = org.id;
+        row.dataset.callingIndex = callingIndex;
+
+        // Changed row highlight
+        const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
+        if (this.changedCallings.has(uniqueCallingId)) {
+            row.classList.add('recently-changed');
+        }
+
+        // Calling name
+        const callingCell = document.createElement('td');
+        callingCell.className = 'calling-name-cell';
+        callingCell.textContent = calling.name;
+        row.appendChild(callingCell);
+
+        // Member name
+        const nameCell = document.createElement('td');
+        if (calling.member && calling.member.name) {
+            const link = document.createElement('span');
+            link.className = 'member-link';
+            link.textContent = calling.member.name;
+            link.onclick = () => this.changeMember(org.id, calling.id, callingIndex);
+            nameCell.appendChild(link);
+        } else {
+            const vacant = document.createElement('span');
+            vacant.className = 'vacant-text';
+            vacant.textContent = 'Calling Vacant';
+            nameCell.appendChild(vacant);
+        }
+        row.appendChild(nameCell);
+
+        // Sustained date
+        const sustainedCell = document.createElement('td');
+        sustainedCell.className = 'sustained-cell';
+        if (calling.activeDate) {
+            const activeDate = new Date(calling.activeDate);
+            sustainedCell.textContent = activeDate.toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+        }
+        row.appendChild(sustainedCell);
+
+        // Set Apart
+        const setApartCell = document.createElement('td');
+        setApartCell.className = 'set-apart-cell';
+        if (calling.setApartDate) {
+            setApartCell.innerHTML = '<span class="set-apart-check">✓</span>';
+        }
+        row.appendChild(setApartCell);
+
+        // Actions (pencil edit icon)
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'actions-cell';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-row-btn';
+        editBtn.title = 'Edit';
+        editBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.toggleInlineEdit(row, calling, org, callingIndex);
+        };
+        actionsCell.appendChild(editBtn);
+        row.appendChild(actionsCell);
+
+        return row;
+    }
+
+    toggleInlineEdit(row, calling, org, callingIndex) {
+        // If already editing, close
+        const existingEditRow = row.parentNode.querySelector('.editing-row');
+        if (existingEditRow) {
+            existingEditRow.remove();
+            return;
+        }
+
+        // Remove any other open edit rows
+        document.querySelectorAll('.editing-row').forEach(r => r.remove());
+
+        // Create inline edit row (like LCR's expanded edit)
+        const editRow = document.createElement('tr');
+        editRow.className = 'editing-row';
+
+        const editCell = document.createElement('td');
+        editCell.colSpan = 5;
+
+        const controls = document.createElement('div');
+        controls.className = 'inline-edit-controls';
+
+        if (calling.member && calling.member.name) {
+            // Release button
+            const releaseBtn = document.createElement('button');
+            releaseBtn.className = 'edit-action-btn release-btn';
+            releaseBtn.textContent = 'Release';
+            releaseBtn.onclick = () => {
+                editRow.remove();
+                this.releaseMember(calling.id, org.id, callingIndex);
+            };
+            controls.appendChild(releaseBtn);
+
+            // Change button
+            const changeBtn = document.createElement('button');
+            changeBtn.className = 'edit-action-btn';
+            changeBtn.textContent = 'Change';
+            changeBtn.onclick = () => {
+                editRow.remove();
+                this.changeMember(org.id, calling.id, callingIndex);
+            };
+            controls.appendChild(changeBtn);
+        } else {
+            // Assign button
+            const assignBtn = document.createElement('button');
+            assignBtn.className = 'edit-action-btn save-btn';
+            assignBtn.textContent = 'Assign Member';
+            assignBtn.onclick = () => {
+                editRow.remove();
+                this.assignMember(org.id, calling.id, callingIndex);
+            };
+            controls.appendChild(assignBtn);
+        }
+
+        // Cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'edit-action-btn cancel-btn';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = () => editRow.remove();
+        controls.appendChild(cancelBtn);
+
+        editCell.appendChild(controls);
+        editRow.appendChild(editCell);
+
+        // Insert after the current row
+        row.after(editRow);
     }
 
     createMembersWithoutCallingsSection(members) {
@@ -1109,15 +1279,20 @@ class CallingManager {
                 header.textContent = org.name;
                 section.appendChild(header);
                 
-                const grid = document.createElement('div');
-                grid.className = 'callings-grid';
+                const table = document.createElement('table');
+                table.className = 'callings-table';
+                const thead = document.createElement('thead');
+                thead.innerHTML = `<tr><th>Calling</th><th>Name</th><th>Sustained</th><th>Set Apart</th><th></th></tr>`;
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
                 
                 matchingCallings.forEach(({ calling, callingIndex }) => {
-                    const card = this.createCallingCard(calling, org, callingIndex);
-                    grid.appendChild(card);
+                    const row = this.createCallingRow(calling, org, callingIndex);
+                    tbody.appendChild(row);
                 });
                 
-                section.appendChild(grid);
+                table.appendChild(tbody);
+                section.appendChild(table);
                 container.appendChild(section);
                 found = true;
             }
@@ -1321,27 +1496,59 @@ class CallingManager {
 
         const modal = document.getElementById('print-changes-modal');
         const changesList = document.getElementById('changes-list');
-        
-        // Build the changes report
+
+        // Get current scenario name
+        const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
+        const scenarioName = currentScenario ? currentScenario.name : 'Scenario';
+
+        // Separate releases from calls/assignments
+        const releases = [];
+        const calls = [];
+        this.changeHistory.forEach(change => {
+            if (change.description.startsWith('Release ')) {
+                releases.push(change.description);
+            } else {
+                calls.push(change.description);
+            }
+        });
+
+        // Build the two-column report
         let html = '<div class="changes-report">';
+        html += `<p class="report-scenario">Scenario: ${scenarioName}</p>`;
         html += `<p class="report-date">Generated: ${new Date().toLocaleString()}</p>`;
         html += `<p class="report-summary">Total Changes: ${this.changeHistory.length}</p>`;
-        html += '<table class="changes-table">';
-        html += '<thead><tr><th>#</th><th>Date/Time</th><th>Change Description</th></tr></thead>';
-        html += '<tbody>';
-        
-        this.changeHistory.forEach((change, index) => {
-            const changeDate = new Date(change.timestamp);
-            const formattedDate = changeDate.toLocaleString();
-            html += `<tr>
-                <td>${index + 1}</td>
-                <td>${formattedDate}</td>
-                <td>${change.description}</td>
-            </tr>`;
-        });
-        
-        html += '</tbody></table></div>';
-        
+        html += '<div class="report-columns">';
+
+        // Releases column
+        html += '<div class="report-column">';
+        html += `<h3>Releases (${releases.length})</h3>`;
+        if (releases.length > 0) {
+            html += '<ol class="report-list">';
+            releases.forEach(desc => {
+                html += `<li>${desc}</li>`;
+            });
+            html += '</ol>';
+        } else {
+            html += '<p class="report-empty">No releases</p>';
+        }
+        html += '</div>';
+
+        // Calls/Assignments column
+        html += '<div class="report-column">';
+        html += `<h3>Calls / Assignments (${calls.length})</h3>`;
+        if (calls.length > 0) {
+            html += '<ol class="report-list">';
+            calls.forEach(desc => {
+                html += `<li>${desc}</li>`;
+            });
+            html += '</ol>';
+        } else {
+            html += '<p class="report-empty">No calls or assignments</p>';
+        }
+        html += '</div>';
+
+        html += '</div></div>';
+
         changesList.innerHTML = html;
         modal.classList.add('active');
     }
