@@ -273,6 +273,113 @@ h2#home-heading,
 }
 
 /* ============================================================
+   Import Methods (Option 3)
+   ============================================================ */
+.import-method {
+    margin-bottom: var(--spacing-24);
+}
+
+.import-method-primary {
+    background: var(--unity-gray2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-24);
+}
+
+.import-method-primary h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-16);
+    color: var(--text-primary);
+}
+
+.import-method-primary ol {
+    margin-left: 1.5rem;
+    margin-bottom: var(--spacing-16);
+    font-weight: 300;
+}
+
+.import-method-primary ol li {
+    margin-bottom: var(--spacing-8);
+    line-height: 1.6;
+}
+
+.bookmarklet-link {
+    display: inline-block;
+    background: var(--unity-gray60);
+    color: white !important;
+    text-decoration: none !important;
+    padding: var(--spacing-4) var(--spacing-16);
+    border-radius: var(--border-radius);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: grab;
+    white-space: nowrap;
+    border: 1px dashed rgba(255,255,255,0.4);
+}
+
+.bookmarklet-link:hover {
+    background: var(--unity-gray40);
+}
+
+.bookmarklet-link:visited {
+    color: white !important;
+}
+
+.import-btn-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-16);
+    margin-top: var(--spacing-16);
+}
+
+.import-status {
+    font-size: 0.875rem;
+    font-weight: 400;
+}
+
+.import-status.success {
+    color: var(--success-color);
+}
+
+.import-status.error {
+    color: var(--danger-color);
+}
+
+.import-method-fallback {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-16);
+}
+
+.import-method-fallback summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    padding: var(--spacing-8) 0;
+}
+
+.import-method-fallback summary:hover {
+    color: var(--text-primary);
+}
+
+.import-method-fallback > ol,
+.import-method-fallback > p {
+    margin-top: var(--spacing-16);
+}
+
+.import-method-fallback ol {
+    margin-left: 1.5rem;
+    font-weight: 300;
+}
+
+.import-method-fallback ol li {
+    margin-bottom: var(--spacing-8);
+    line-height: 1.6;
+}
+
+/* ============================================================
    Form Elements
    ============================================================ */
 .form-group {
@@ -567,6 +674,78 @@ header .toolbar .secondary-btn:disabled {
     border-color: rgba(255,255,255,0.15);
 }
 
+/* ── Organization filter dropdown ── */
+.org-filter-wrapper {
+    position: relative;
+}
+
+.org-filter-btn {
+    white-space: nowrap;
+}
+
+.org-filter-btn svg {
+    margin-left: 2px;
+    transition: transform 0.2s;
+}
+
+.org-filter-btn.active {
+    background: rgba(255,255,255,0.2) !important;
+}
+
+.org-filter-btn.active svg {
+    transform: rotate(180deg);
+}
+
+.org-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 1000;
+    min-width: 260px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    padding: var(--spacing-8) 0;
+}
+
+.org-filter-dropdown.open {
+    display: block;
+}
+
+.org-filter-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-8);
+    padding: var(--spacing-8) var(--spacing-16);
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.org-filter-item:hover {
+    background: var(--hover-bg);
+}
+
+.org-filter-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.org-filter-all {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: var(--spacing-12);
+    margin-bottom: var(--spacing-4);
+    font-weight: 600;
+}
+
 header .toolbar input[type="text"] {
     flex: 1;
     min-width: 200px;
@@ -608,6 +787,212 @@ header .toolbar input[type="text"]:focus {
     margin-bottom: var(--spacing-4);
     padding-bottom: var(--spacing-8);
     border-bottom: none;
+}
+
+/* ============================================================
+   Org-level Callings / Members Tabs
+   ============================================================ */
+.org-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: var(--spacing-4);
+}
+
+.org-tab {
+    padding: var(--spacing-8) var(--spacing-16);
+    border: none;
+    background: none;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.org-tab:hover {
+    color: var(--text-primary);
+}
+
+.org-tab.active {
+    color: var(--link-color);
+    border-bottom-color: var(--link-color);
+}
+
+.org-tab-pane {
+    display: none;
+}
+
+.org-tab-pane.active {
+    display: block;
+}
+
+/* Class members table (read-only, inside Members tab) */
+.class-section {
+    margin-bottom: var(--spacing-16);
+}
+
+.class-header {
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: var(--spacing-8) 0 var(--spacing-4);
+    padding: 0;
+}
+
+.class-members-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    margin-bottom: var(--spacing-8);
+}
+
+.class-members-table thead th {
+    text-align: left;
+    padding: var(--spacing-4) var(--spacing-8);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.class-members-table thead th.sortable-th {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.class-members-table thead th.sortable-th:hover {
+    color: var(--accent-blue);
+}
+
+.class-members-table tbody td {
+    padding: var(--spacing-4) var(--spacing-8);
+    border-bottom: 1px solid #f0f0f0;
+    color: var(--text-primary);
+}
+
+.class-members-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Members Without Callings search input */
+.mwoc-search-row {
+    padding: var(--spacing-8) 0;
+}
+
+.mwoc-search {
+    width: 100%;
+    max-width: 320px;
+    padding: var(--spacing-8) var(--spacing-12);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background: white;
+}
+
+.mwoc-search:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(21, 116, 147, 0.15);
+}
+
+/* ============================================================
+   Validation Rules Table
+   ============================================================ */
+
+.validation-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.validation-rules-table thead th {
+    text-align: left;
+    padding: var(--spacing-8);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.validation-rules-table tbody tr[data-org-id] td {
+    padding: var(--spacing-4) var(--spacing-8);
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.validation-rules-table tbody tr[data-org-id] td.indent {
+    padding-left: var(--spacing-24);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.validation-rules-table tbody tr[data-calling-key] td {
+    padding: var(--spacing-4) var(--spacing-8);
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.validation-rules-table tbody tr[data-calling-key] td.indent-calling {
+    padding-left: 40px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+.validation-group-row td {
+    padding: var(--spacing-12) var(--spacing-8) var(--spacing-4);
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.validation-rules-table select,
+.validation-rules-table input[type="number"] {
+    padding: var(--spacing-4) var(--spacing-8);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    background: white;
+}
+
+.validation-rules-table select {
+    min-width: 100px;
+}
+
+.validation-rules-table input[type="number"] {
+    width: 60px;
+    text-align: center;
+}
+
+.validation-rules-table select:focus,
+.validation-rules-table input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(21, 116, 147, 0.15);
+}
+
+#validation-rules-table-container {
+    max-height: 55vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
 }
 
 /* Sub-org heading (e.g. "Elders Quorum Presidency") */
