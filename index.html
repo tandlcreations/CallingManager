@@ -180,8 +180,9 @@
                 <div class="side-panel-tabs">
                     <button class="tab-btn active" data-tab="callings" onclick="window.callingManager.switchTab('callings')">Callings</button>
                     <button class="tab-btn" data-tab="members" onclick="window.callingManager.switchTab('members')">Members</button>
+                    <button class="tab-btn" data-tab="columns" onclick="window.callingManager.switchTab('columns')">Columns</button>
                 </div>
-                <div class="side-panel-actions">
+                <div class="side-panel-actions" id="visibility-bulk-actions">
                     <button onclick="window.callingManager.toggleAllItems(true)" class="secondary-btn">Show All</button>
                     <button onclick="window.callingManager.toggleAllItems(false)" class="secondary-btn">Hide All</button>
                 </div>
@@ -191,6 +192,9 @@
                     </div>
                     <div id="members-tab-content" class="tab-content">
                         <div id="members-visibility-list" class="visibility-list"></div>
+                    </div>
+                    <div id="columns-tab-content" class="tab-content">
+                        <div id="columns-visibility-list" class="visibility-list"></div>
                     </div>
                 </div>
             </div>
@@ -204,10 +208,67 @@
                     </div>
                     <div class="modal-body">
                         <input type="text" id="member-search" class="modal-search" placeholder="Search members..." />
+                        <div id="member-modal-filter-badge" class="member-filter-badge" style="display:none"></div>
                         <div id="member-list" class="member-list"></div>
                         <div class="modal-actions">
                             <button onclick="window.callingManager.closeMemberModal()" class="secondary-btn">Cancel</button>
                             <button onclick="window.callingManager.showAddNewMember()" class="primary-btn">+ Add New Member</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resume Session Modal -->
+            <div id="resume-session-modal" class="modal">
+                <div class="modal-content" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h2>Resume Session</h2>
+                    </div>
+                    <div class="modal-body">
+                        <p class="resume-session-text">A previous session was found.</p>
+                        <div class="resume-session-details">
+                            <div class="resume-detail-row"><span class="resume-detail-label">Scenarios:</span> <span id="resume-session-scenarios"></span></div>
+                            <div class="resume-detail-row"><span class="resume-detail-label">Total changes:</span> <span id="resume-session-changes"></span></div>
+                        </div>
+                        <p class="resume-session-text">Would you like to resume where you left off?</p>
+                        <div class="modal-actions">
+                            <button onclick="window.callingManager.resumeSessionNo()" class="secondary-btn">No</button>
+                            <button onclick="window.callingManager.resumeSessionYes()" class="primary-btn">Yes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Callings Info Modal -->
+            <div id="member-callings-info-modal" class="modal">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h2>Member Callings</h2>
+                        <button class="close-btn" onclick="window.callingManager.closeMemberCallingsInfo()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="member-callings-info-name" class="existing-callings-message"></p>
+                        <div id="member-callings-info-list" class="member-callings-info-list"></div>
+                        <div class="modal-actions">
+                            <button onclick="window.callingManager.closeMemberCallingsInfo()" class="secondary-btn">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Callings Release Modal -->
+            <div id="existing-callings-modal" class="modal">
+                <div class="modal-content" style="max-width: 550px;">
+                    <div class="modal-header">
+                        <h2>Existing Callings</h2>
+                        <button class="close-btn" onclick="window.callingManager.closeExistingCallingsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="existing-callings-message" class="existing-callings-message"></p>
+                        <div id="existing-callings-list" class="existing-callings-list"></div>
+                        <div class="modal-actions">
+                            <button onclick="window.callingManager.closeExistingCallingsModal()" class="secondary-btn">Cancel</button>
+                            <button id="existing-callings-submit" onclick="window.callingManager.submitExistingCallingsDecision()" class="primary-btn">Proceed</button>
                         </div>
                     </div>
                 </div>
@@ -268,9 +329,11 @@
     <!-- Print Changes Modal -->
     <div id="print-changes-modal" class="modal">
         <div class="modal-content print-modal-content">
-            <span class="close" onclick="window.callingManager.closePrintChanges()">&times;</span>
-            <div id="print-changes-content">
+            <div class="modal-header">
                 <h2>Calling Changes Report</h2>
+                <button class="close-btn" onclick="window.callingManager.closePrintChanges()">&times;</button>
+            </div>
+            <div id="print-changes-content">
                 <div id="changes-list"></div>
             </div>
             <div class="modal-footer no-print">

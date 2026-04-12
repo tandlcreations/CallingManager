@@ -16,17 +16,20 @@ class CallingManager {
         this.filteredData = null;
         this.currentOrg = null;
         this.pendingAssignment = null; // Store org/calling for member selection
+        this.pendingMember = null; // Store member during existing-callings modal flow
         this.currentTab = 'callings';
         this.changeHistory = []; // Track changes for undo
         this.changedCallings = new Set(); // Track which callings have been modified
         this.hiddenOrgGroups = new Set(); // Top-level org groups that are hidden in the filter
         this.orgValidationRules = {}; // Custom age/gender rules per org, keyed by org id
+        this.hiddenColumns = new Set(); // Columns hidden by user (sustained, setApart, timeInCalling)
         this.init();
     }
 
     init() {
         this.attachEventListeners();
         this.checkStoredData();
+        this.checkForResumableSession();
     }
 
     attachEventListeners() {
@@ -187,45 +190,59 @@ class CallingManager {
                 console.error('Error loading validation rules:', e);
             }
         }
+
+        const storedHiddenCols = localStorage.getItem('callingManagerHiddenColumns');
+        if (storedHiddenCols) {
+            try {
+                this.hiddenColumns = new Set(JSON.parse(storedHiddenCols));
+            } catch (e) {
+                console.error('Error loading hidden columns:', e);
+            }
+        }
+    }
+
+    checkForResumableSession() {
+        const hasSession = localStorage.getItem('callingManagerSession');
+        if (!hasSession || !this.callingsData) return;
+
+        // Check if the session has any actual changes worth resuming
+        try {
+            const session = JSON.parse(hasSession);
+            const totalChanges = (session.scenarios || []).reduce((sum, s) => {
+                return sum + (s.changeHistory ? s.changeHistory.length : 0);
+            }, 0);
+            const scenarioNames = (session.scenarios || []).map(s => s.name).join(', ');
+
+            const modal = document.getElementById('resume-session-modal');
+            document.getElementById('resume-session-scenarios').textContent = scenarioNames;
+            document.getElementById('resume-session-changes').textContent = totalChanges;
+            modal.classList.add('active');
+        } catch (e) {
+            console.error('Error checking resumable session:', e);
+            this.clearSessionState();
+        }
+    }
+
+    resumeSessionYes() {
+        document.getElementById('resume-session-modal').classList.remove('active');
+        if (this.restoreSessionState()) {
+            this.showManager();
+        }
+    }
+
+    resumeSessionNo() {
+        document.getElementById('resume-session-modal').classList.remove('active');
+        this.clearSessionState();
     }
 
     loadDemoData() {
-        // Embedded expanded demo data with scriptural and historical LDS names
-        const demoCallings = [{"unitNumber":100001,"unitType":7,"subOrgId":1,"parentSubOrgId":null,"parentName":"Bishopric","name":"Bishopric","children":[],"callings":[{"positionId":101,"position":"Bishop","memberId":1001,"memberName":"Smith, Joseph","activeDate":"20240115","setApartDate":"20240115"},{"positionId":102,"position":"First Counselor","memberId":1002,"memberName":"Young, Brigham","activeDate":"20240115","setApartDate":"20240115"},{"positionId":103,"position":"Second Counselor","memberId":1003,"memberName":"Cowdery, Oliver","activeDate":"20240115","setApartDate":"20240115"},{"positionId":104,"position":"Executive Secretary","memberId":1004,"memberName":"Kimball, Heber C.","activeDate":"20240210","setApartDate":"20240210"},{"positionId":105,"position":"Ward Clerk","memberId":1005,"memberName":"Richards, Willard","activeDate":"20240210","setApartDate":"20240210"},{"positionId":106,"position":"Assistant Ward Clerk--Finance","memberId":1006,"memberName":"Grant, Heber J.","activeDate":"20240210","setApartDate":"20240210"},{"positionId":107,"position":"Assistant Ward Clerk--Membership","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]},{"unitNumber":100001,"subOrgId":2,"name":"Elders Quorum Presidency","children":[{"subOrgId":21,"name":"Teachers","callings":[{"positionId":211,"position":"Gospel Doctrine Teacher","memberId":2011,"memberName":"Holland, Jeffrey R.","activeDate":"20240320","setApartDate":"20240320"},{"positionId":212,"position":"Gospel Doctrine Teacher","memberId":2012,"memberName":"Bednar, David A.","activeDate":"20240320","setApartDate":"20240320"}]},{"subOrgId":22,"name":"Ministering","callings":[{"positionId":221,"position":"Ministering Secretary","memberId":2021,"memberName":"Cook, Quentin L.","activeDate":"20240320","setApartDate":"20240320"}]},{"subOrgId":23,"name":"Activities","callings":[{"positionId":231,"position":"Activities Committee Member","memberId":2031,"memberName":"Ballard, M. Russell","activeDate":"20240401","setApartDate":"20240401"},{"positionId":232,"position":"Activities Committee Member","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]},{"subOrgId":24,"name":"Service","callings":[{"positionId":241,"position":"Service Coordinator","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]}],"callings":[{"positionId":201,"position":"Elders Quorum President","memberId":2001,"memberName":"Taylor, John","activeDate":"20240315","setApartDate":"20240315"},{"positionId":202,"position":"First Counselor","memberId":2002,"memberName":"Woodruff, Wilford","activeDate":"20240315","setApartDate":"20240315"},{"positionId":203,"position":"Second Counselor","memberId":2003,"memberName":"Snow, Lorenzo","activeDate":"20240315","setApartDate":"20240315"},{"positionId":204,"position":"Secretary","memberId":2004,"memberName":"Packer, Boyd K.","activeDate":"20240315","setApartDate":"20240315"}]},{"unitNumber":100001,"subOrgId":3,"name":"Relief Society","children":[{"subOrgId":31,"name":"Activities","callings":[{"positionId":311,"position":"Activities Committee Member","memberId":3011,"memberName":"Cannon, Martha Hughes","activeDate":"20240401","setApartDate":"20240401"},{"positionId":312,"position":"Activities Committee Member","memberId":3012,"memberName":"Kapp, Ardeth G.","activeDate":"20240401","setApartDate":"20240401"}]},{"subOrgId":32,"name":"Ministering","callings":[{"positionId":321,"position":"Ministering Secretary","memberId":3021,"memberName":"Smoot, Mary Ellen","activeDate":"20240401","setApartDate":"20240401"}]},{"subOrgId":33,"name":"Teachers","callings":[{"positionId":331,"position":"Gospel Doctrine Teacher","memberId":3031,"memberName":"Jack, Elaine L.","activeDate":"20240410","setApartDate":"20240410"}]}],"callings":[{"positionId":301,"position":"Relief Society President","memberId":3001,"memberName":"Smith, Emma","activeDate":"20240320","setApartDate":"20240320"},{"positionId":302,"position":"First Counselor","memberId":3002,"memberName":"Snow, Eliza R.","activeDate":"20240320","setApartDate":"20240320"},{"positionId":303,"position":"Second Counselor","memberId":3003,"memberName":"Wells, Emmeline B.","activeDate":"20240320","setApartDate":"20240320"},{"positionId":304,"position":"Secretary","memberId":3004,"memberName":"Young, Zina D.","activeDate":"20240401","setApartDate":"20240401"}]},{"unitNumber":100001,"subOrgId":4,"name":"Sunday School","children":[{"subOrgId":41,"name":"Teachers","callings":[{"positionId":411,"position":"Gospel Doctrine Teacher","memberId":4011,"memberName":"Lee, Harold B.","activeDate":"20240310","setApartDate":"20240310"},{"positionId":412,"position":"Gospel Doctrine Teacher","memberId":4012,"memberName":"Kimball, Spencer W.","activeDate":"20240310","setApartDate":"20240310"}]}],"callings":[{"positionId":401,"position":"Sunday School President","memberId":4001,"memberName":"Richards, Franklin D.","activeDate":"20240215","setApartDate":"20240215"},{"positionId":402,"position":"First Counselor","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null},{"positionId":403,"position":"Second Counselor","memberId":4003,"memberName":"McKay, David O.","activeDate":"20240501","setApartDate":"20240501"},{"positionId":404,"position":"Secretary","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]},{"unitNumber":100001,"subOrgId":5,"name":"Primary","children":[{"subOrgId":51,"name":"Music","callings":[{"positionId":511,"position":"Primary Music Leader","memberId":5011,"memberName":"Okazaki, Chieko N.","activeDate":"20240201","setApartDate":"20240201"},{"positionId":512,"position":"Primary Pianist","memberId":5012,"memberName":"Winder, Barbara W.","activeDate":"20240201","setApartDate":"20240201"}]}],"callings":[{"positionId":501,"position":"Primary President","memberId":5001,"memberName":"Reeve, Aurelia Spencer","activeDate":"20240120","setApartDate":"20240120"},{"positionId":502,"position":"First Counselor","memberId":5002,"memberName":"Rogers, Louie B.","activeDate":"20240120","setApartDate":"20240120"},{"positionId":503,"position":"Second Counselor","memberId":5003,"memberName":"Dew, Sheri L.","activeDate":"20240120","setApartDate":"20240120"},{"positionId":504,"position":"Secretary","memberId":5004,"memberName":"Madsen, Carol F.","activeDate":"20240205","setApartDate":"20240205"}]},{"unitNumber":100001,"subOrgId":6,"name":"Young Women","children":[{"subOrgId":61,"name":"Additional Callings","callings":[{"positionId":611,"position":"Activity Committee Member","memberId":6011,"memberName":"Beck, Julie B.","activeDate":"20240501","setApartDate":"20240501"}]}],"callings":[{"positionId":601,"position":"Young Women President","memberId":6001,"memberName":"Reeve, Elmina Shepard","activeDate":"20240410","setApartDate":"20240410"},{"positionId":602,"position":"First Counselor","memberId":6002,"memberName":"Gates, Susa Young","activeDate":"20240410","setApartDate":"20240410"},{"positionId":603,"position":"Second Counselor","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null},{"positionId":604,"position":"Secretary","memberId":6004,"memberName":"Tanner, Susan W.","activeDate":"20240515","setApartDate":"20240515"}]},{"unitNumber":100001,"subOrgId":7,"name":"Young Men","children":[],"callings":[{"positionId":701,"position":"Young Men President","memberId":7001,"memberName":"Benson, Ezra Taft","activeDate":"20240410","setApartDate":"20240410"},{"positionId":702,"position":"First Counselor","memberId":7002,"memberName":"Hinckley, Gordon B.","activeDate":"20240410","setApartDate":"20240410"},{"positionId":703,"position":"Second Counselor","memberId":7003,"memberName":"Hunter, Howard W.","activeDate":"20240410","setApartDate":"20240410"},{"positionId":704,"position":"Secretary","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]},{"unitNumber":100001,"subOrgId":8,"name":"Aaronic Priesthood Quorums","children":[{"subOrgId":81,"name":"Presidency of the Aaronic Priesthood","children":[{"subOrgId":811,"name":"Priests Quorum Presidency","callings":[{"positionId":8111,"position":"Priests Quorum President","memberId":8111,"memberName":"Richards, Samuel","activeDate":"20240520","setApartDate":"20240520"},{"positionId":8112,"position":"First Counselor","memberId":8112,"memberName":"Romney, Joshua","activeDate":"20240520","setApartDate":"20240520"},{"positionId":8113,"position":"Second Counselor","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]}],"callings":[]},{"subOrgId":82,"name":"Deacons Quorum","callings":[{"positionId":821,"position":"Deacons Quorum Adviser","memberId":8201,"memberName":"Monson, Thomas S.","activeDate":"20240501","setApartDate":"20240501"}]}],"callings":[]},{"unitNumber":100001,"subOrgId":9,"name":"Temple and Family History","children":[],"callings":[{"positionId":901,"position":"Ward Temple and Family History Consultant","memberId":9001,"memberName":"Haight, David B.","activeDate":"20240520","setApartDate":"20240520"},{"positionId":902,"position":"Ward Temple and Family History Consultant","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]},{"unitNumber":100001,"subOrgId":10,"name":"Ward Missionaries","children":[],"callings":[{"positionId":1001,"position":"Ward Mission Leader","memberId":10001,"memberName":"Alma","activeDate":"20240518","setApartDate":"20240518"},{"positionId":1002,"position":"Ward Missionary","memberId":10002,"memberName":"Nephi","activeDate":"20240518","setApartDate":"20240518"},{"positionId":1003,"position":"Ward Missionary","memberId":10003,"memberName":"Ammon","activeDate":"20240518","setApartDate":"20240518"}]},{"unitNumber":100001,"subOrgId":11,"parentSubOrgId":110,"parentName":"Other Callings","name":"Music","children":[],"callings":[{"positionId":1101,"position":"Ward Choir Director","memberId":11001,"memberName":"Pingree, Anne C.","activeDate":"20240601","setApartDate":"20240601"},{"positionId":1102,"position":"Ward Organist","memberId":11002,"memberName":"Faust, Ruth Wright","activeDate":"20240601","setApartDate":"20240601"},{"positionId":1103,"position":"Ward Chorister","memberId":11003,"memberName":"McConkie, Amelia","activeDate":"20240601","setApartDate":"20240601"}]},{"unitNumber":100001,"subOrgId":12,"parentSubOrgId":110,"parentName":"Other Callings","name":"Technology","children":[],"callings":[{"positionId":1201,"position":"Ward Technology Specialist","memberId":12001,"memberName":"Moroni","activeDate":"20240610","setApartDate":"20240610"}]},{"unitNumber":100001,"subOrgId":13,"parentSubOrgId":110,"parentName":"Other Callings","name":"Welfare and Self-Reliance","children":[],"callings":[{"positionId":1301,"position":"Ward Employment Specialist","memberId":null,"memberName":null,"activeDate":null,"setApartDate":null}]}];
+        // Demo data using real ward org structure with historical/scriptural names
+        const demoCallings = {"subOrgs":[{"id":404686,"name":"Bishopric","callings":[{"id":49142007,"name":"Bishop","member":{"id":100248,"name":"Kopischke, Loren"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":49142128,"name":"Bishopric First Counselor","member":{"id":100054,"name":"Hales, Ezra"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":49142046,"name":"Bishopric Second Counselor","member":{"id":100148,"name":"Stevenson, Franklin"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":51333333,"name":"Ward Executive Secretary","member":{"id":100057,"name":"Tuttle, Barnabas"},"activeDate":"2023-03-12","setApartDate":"2023-03-12"},{"id":"404686-Ward Assistant Executive Secretary","name":"Ward Assistant Executive Secretary","member":null,"activeDate":null,"setApartDate":null},{"id":"404686-Ward Assistant Executive Secretary","name":"Ward Assistant Executive Secretary","member":null,"activeDate":null,"setApartDate":null},{"id":54664798,"name":"Ward Clerk","member":{"id":100221,"name":"Cordon, Joshua"},"activeDate":"2024-10-20","setApartDate":"2024-10-20"},{"id":45894930,"name":"Ward Assistant Clerk","member":{"id":100077,"name":"Bateman, Loren"},"activeDate":"2020-03-08","setApartDate":"2024-10-20"},{"id":47866552,"name":"Ward Assistant Clerk--Membership","member":{"id":100192,"name":"Aoyagi, Eli"},"activeDate":"2021-08-08","setApartDate":"2021-08-08"},{"id":31048657,"name":"Ward Assistant Clerk--Finance","member":{"id":100077,"name":"Bateman, Loren"},"activeDate":"2014-08-24","setApartDate":"2014-08-24"}]},{"id":2334516,"name":"Elders Quorum Presidency","callings":[{"id":49189768,"name":"Elders Quorum President","member":{"id":100318,"name":"Eyring, Luke"},"activeDate":"2022-03-13","setApartDate":"2022-03-13"},{"id":63112380,"name":"Elders Quorum First Counselor","member":{"id":100097,"name":"Grant, Barnabas"},"activeDate":"2025-06-01","setApartDate":"2025-06-01"},{"id":63112368,"name":"Elders Quorum Second Counselor","member":{"id":100112,"name":"Christofferson, Zoram"},"activeDate":"2025-06-01","setApartDate":"2025-06-01"},{"id":63249303,"name":"Elders Quorum Secretary","member":{"id":100069,"name":"Harris, Ether"},"activeDate":"2025-06-15","setApartDate":null},{"id":"2334516-Elders Quorum Assistant Secretary","name":"Elders Quorum Assistant Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962095,"name":"Elders Quorum - Teachers","callings":[{"id":53019567,"name":"Elders Quorum Teacher","member":{"id":100141,"name":"Widtsoe, Isaac"},"activeDate":"2024-01-28","setApartDate":null},{"id":"3962095-Elders Quorum Teacher","name":"Elders Quorum Teacher","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962093,"name":"Elders Quorum - Ministering","callings":[{"id":"3962093-Elders Quorum Ministering Secretary","name":"Elders Quorum Ministering Secretary","member":null,"activeDate":null,"setApartDate":null},{"id":"3962093-Elders Quorum Ministering Secretary","name":"Elders Quorum Ministering Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":8919439,"name":"Elders Quorum - Activities","callings":[{"id":"8919439-Elders Quorum Activity Coordinator","name":"Elders Quorum Activity Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":"8919439-Elders Quorum Assistant Activity Coordinator","name":"Elders Quorum Assistant Activity Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":"8919439-Elders Quorum Activity Committee Member","name":"Elders Quorum Activity Committee Member","member":null,"activeDate":null,"setApartDate":null}]},{"id":8919438,"name":"Elders Quorum - Service","callings":[{"id":"8919438-Elders Quorum Service Coordinator","name":"Elders Quorum Service Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":"8919438-Elders Quorum Assistant Service Coordinator","name":"Elders Quorum Assistant Service Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":"8919438-Elders Quorum Service Committee Member","name":"Elders Quorum Service Committee Member","member":null,"activeDate":null,"setApartDate":null}]},{"id":2258744,"name":"Relief Society Presidency","callings":[{"id":53056123,"name":"Relief Society President","member":{"id":100173,"name":"Taylor, Sarah"},"activeDate":"2024-02-04","setApartDate":"2024-10-27"},{"id":54742632,"name":"Relief Society First Counselor","member":{"id":100149,"name":"Stevenson, Ruth"},"activeDate":"2024-11-03","setApartDate":"2024-11-03"},{"id":53057242,"name":"Relief Society Second Counselor","member":{"id":100071,"name":"Harris, Louie"},"activeDate":"2024-02-04","setApartDate":"2024-10-27"},{"id":53056864,"name":"Relief Society Secretary","member":{"id":100091,"name":"Simpson, Ruth"},"activeDate":"2024-02-04","setApartDate":"2024-10-27"},{"id":"2258744-Relief Society Assistant Secretary","name":"Relief Society Assistant Secretary","member":null,"activeDate":null,"setApartDate":null},{"id":50163012,"name":"Humanitarian Leader","member":{"id":100041,"name":"Pratt, Naomi"},"activeDate":"2022-08-14","setApartDate":null},{"id":"2258744-Missionary Meal Coordinator","name":"Missionary Meal Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":"2258744-Newsletter","name":"Newsletter","member":null,"activeDate":null,"setApartDate":null},{"id":63243614,"name":"Relief Society Newsletter","member":{"id":100049,"name":"Lund, Martha"},"activeDate":"2023-02-26","setApartDate":"2025-06-15"},{"id":63243630,"name":"Relief Society Something Special Chair","member":{"id":100213,"name":"Oaks, Isabel"},"activeDate":"2023-01-29","setApartDate":"2025-06-15"},{"id":"2258744-Relief Society Something Special Rep","name":"Relief Society Something Special Rep","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962160,"name":"Relief Society - Teachers","callings":[{"id":"3962160-Relief Society Teacher","name":"Relief Society Teacher","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962163,"name":"Relief Society - Ministering","callings":[{"id":"3962163-Relief Society Ministering Secretary","name":"Relief Society Ministering Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962164,"name":"Relief Society - Activities","callings":[{"id":54744901,"name":"Relief Society Activity Coordinator","member":{"id":100025,"name":"Young, Sophia"},"activeDate":"2024-11-03","setApartDate":null},{"id":"3962164-Relief Society Assistant Activity Coordinator","name":"Relief Society Assistant Activity Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":63249260,"name":"Relief Society Activity Committee Member","member":{"id":100104,"name":"Page, Susa"},"activeDate":"2025-06-15","setApartDate":null},{"id":55781643,"name":"Relief Society Activity Committee Member","member":{"id":100288,"name":"Faust, Cora"},"activeDate":"2025-02-09","setApartDate":null}]},{"id":3962162,"name":"Relief Society - Music","callings":[{"id":"3962162-Relief Society Music Leader","name":"Relief Society Music Leader","member":null,"activeDate":null,"setApartDate":null},{"id":"3962162-Relief Society Pianist","name":"Relief Society Pianist","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962167,"name":"Relief Society - Service","callings":[{"id":49439666,"name":"Relief Society Service Coordinator","member":{"id":100143,"name":"Kearon, Leah"},"activeDate":"2022-05-01","setApartDate":"2022-05-01"},{"id":"3962167-Relief Society Assistant Service Coordinator","name":"Relief Society Assistant Service Coordinator","member":null,"activeDate":null,"setApartDate":null},{"id":49469391,"name":"Relief Society Service Committee Member","member":{"id":100075,"name":"Patten, Louie"},"activeDate":"2022-05-08","setApartDate":null}]},{"id":8697472,"name":"Aaronic Priesthood Quorums - Presidency of the Aaronic Priesthood","callings":[{"id":49142007,"name":"Bishop","member":{"id":100248,"name":"Kopischke, Loren"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":49142128,"name":"Bishopric First Counselor","member":{"id":100054,"name":"Hales, Ezra"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":49142046,"name":"Bishopric Second Counselor","member":{"id":100148,"name":"Stevenson, Franklin"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"}]},{"id":3962098,"name":"Priests Quorum Presidency","callings":[{"id":49145858,"name":"Priests Quorum President","member":{"id":100248,"name":"Kopischke, Loren"},"activeDate":"2022-03-06","setApartDate":"2022-03-06"},{"id":55759922,"name":"Priests Quorum First Assistant","member":{"id":100154,"name":"Morrison, James"},"activeDate":"2024-07-28","setApartDate":"2025-02-09"},{"id":55760006,"name":"Priests Quorum Second Assistant","member":{"id":100260,"name":"Richards, Stephen"},"activeDate":"2024-07-28","setApartDate":"2025-02-09"},{"id":"3962098-Priests Quorum Secretary","name":"Priests Quorum Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":8697397,"name":"Priests Quorum Adult Leaders","callings":[{"id":64138921,"name":"Priests Quorum Adviser","member":{"id":100315,"name":"Merrill, Ezra"},"activeDate":"2025-11-09","setApartDate":"2025-11-16"},{"id":"8697397-Priests Quorum Specialist","name":"Priests Quorum Specialist","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962149,"name":"Teachers Quorum Presidency","callings":[{"id":55760292,"name":"Teachers Quorum President","member":{"id":100014,"name":"Lee, Thomas"},"activeDate":"2025-02-02","setApartDate":"2025-02-09"},{"id":"3962149-Teachers Quorum First Counselor","name":"Teachers Quorum First Counselor","member":null,"activeDate":null,"setApartDate":null},{"id":"3962149-Teachers Quorum Second Counselor","name":"Teachers Quorum Second Counselor","member":null,"activeDate":null,"setApartDate":null},{"id":"3962149-Teachers Quorum Secretary","name":"Teachers Quorum Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":8697446,"name":"Teachers Quorum Adult Leaders","callings":[{"id":"8697446-Teachers Quorum Adviser","name":"Teachers Quorum Adviser","member":null,"activeDate":null,"setApartDate":null},{"id":"8697446-Teachers Quorum Specialist","name":"Teachers Quorum Specialist","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962151,"name":"Deacons Quorum Presidency","callings":[{"id":55760356,"name":"Deacons Quorum President","member":{"id":100021,"name":"Renlund, Andrew"},"activeDate":"2025-02-02","setApartDate":"2025-03-16"},{"id":55760357,"name":"Deacons Quorum First Counselor","member":{"id":100293,"name":"Rasband, Hosea"},"activeDate":"2025-02-02","setApartDate":"2025-03-16"},{"id":55760389,"name":"Deacons Quorum Second Counselor","member":{"id":100308,"name":"Petersen, Donald"},"activeDate":"2025-02-02","setApartDate":null},{"id":55760078,"name":"Deacons Quorum Secretary","member":{"id":100150,"name":"Stevenson, Dieter"},"activeDate":"2025-02-02","setApartDate":"2025-03-16"}]},{"id":8697468,"name":"Deacons Quorum Adult Leaders","callings":[{"id":53106023,"name":"Deacons Quorum Adviser","member":{"id":100006,"name":"Bowen, Zoram"},"activeDate":"2024-02-11","setApartDate":"2024-03-10"},{"id":63194017,"name":"Deacons Quorum Adviser","member":{"id":100027,"name":"Young, Brent"},"activeDate":"2025-06-08","setApartDate":"2025-06-08"},{"id":48431884,"name":"Deacons Quorum Specialist","member":{"id":100156,"name":"Morrison, Jedediah"},"activeDate":"2021-11-14","setApartDate":null}]},{"id":3962156,"name":"Additional Aaronic Priesthood Quorums Callings","callings":[{"id":"3962156-Aaronic Priesthood Quorums Specialist - Camp Director","name":"Aaronic Priesthood Quorums Specialist - Camp Director","member":null,"activeDate":null,"setApartDate":null},{"id":"3962156-Aaronic Priesthood Quorums Specialist - Assistant Camp Director","name":"Aaronic Priesthood Quorums Specialist - Assistant Camp Director","member":null,"activeDate":null,"setApartDate":null},{"id":"3962156-Young Men Stake Youth Committee Member","name":"Young Men Stake Youth Committee Member","member":null,"activeDate":null,"setApartDate":null},{"id":"3962156-Young Men Specialist - Sports","name":"Young Men Specialist - Sports","member":null,"activeDate":null,"setApartDate":null},{"id":"3962156-Young Men Specialist - Sports Assistant","name":"Young Men Specialist - Sports Assistant","member":null,"activeDate":null,"setApartDate":null},{"id":47159417,"name":"Aaronic Priesthood Quorums Specialist","member":{"id":100018,"name":"Renlund, Enos"},"activeDate":"2021-02-07","setApartDate":"2021-03-28"},{"id":54599879,"name":"Ward FSY Representative","member":{"id":100248,"name":"Kopischke, Loren"},"activeDate":"2024-10-06","setApartDate":null}]},{"id":2598853,"name":"Young Women Presidency","callings":[{"id":51066196,"name":"Young Women President","member":{"id":100230,"name":"Hyde, Amelia"},"activeDate":"2023-01-29","setApartDate":"2023-02-05"},{"id":54743176,"name":"Young Women First Counselor","member":{"id":100225,"name":"Cordon, Hannah"},"activeDate":"2024-11-03","setApartDate":"2024-11-03"},{"id":51066152,"name":"Young Women Second Counselor","member":{"id":100013,"name":"Lee, Rebecca"},"activeDate":"2023-01-29","setApartDate":"2023-02-05"},{"id":52457943,"name":"Young Women Secretary","member":{"id":100157,"name":"Morrison, Anne"},"activeDate":"2023-10-22","setApartDate":"2023-10-22"},{"id":"2598853-Young Women Specialist","name":"Young Women Specialist","member":null,"activeDate":null,"setApartDate":null}]},{"id":8473449,"name":"Young Women 12-18 Class Presidency","callings":[{"id":64617437,"name":"Young Women Class President","member":{"id":100226,"name":"Hyde, Deborah"},"activeDate":"2026-01-25","setApartDate":"2026-01-25"},{"id":64617522,"name":"Young Women Class First Counselor","member":{"id":100022,"name":"Young, Lucile"},"activeDate":"2026-01-25","setApartDate":"2026-01-25"},{"id":64617462,"name":"Young Women Class Second Counselor","member":{"id":100011,"name":"Lee, Emily"},"activeDate":"2026-01-25","setApartDate":"2026-01-25"},{"id":64617554,"name":"Young Women Class Secretary","member":{"id":100042,"name":"Lund, Cora"},"activeDate":"2026-01-25","setApartDate":"2026-01-25"}]},{"id":8473447,"name":"Young Women 12-18 Class Adult Leaders","callings":[{"id":55040464,"name":"Young Women Class Adviser","member":{"id":100210,"name":"Young, Esther"},"activeDate":"2024-11-03","setApartDate":"2025-01-05"},{"id":52458055,"name":"Young Women Class Adviser","member":{"id":100278,"name":"Romney, Hope"},"activeDate":"2023-10-22","setApartDate":"2023-11-05"},{"id":"8473447-Young Women Specialist","name":"Young Women Specialist","member":null,"activeDate":null,"setApartDate":null}]},{"id":1098992,"name":"Additional Young Women Callings","callings":[{"id":"1098992-Young Women Specialist","name":"Young Women Specialist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Specialist - Activities","name":"Young Women Specialist - Activities","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Specialist - Camp Director","name":"Young Women Specialist - Camp Director","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Specialist - Assistant Camp Director","name":"Young Women Specialist - Assistant Camp Director","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Stake Youth Committee","name":"Young Women Stake Youth Committee","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Specialist - Sports","name":"Young Women Specialist - Sports","member":null,"activeDate":null,"setApartDate":null},{"id":"1098992-Young Women Specialist - Sports Assistant","name":"Young Women Specialist - Sports Assistant","member":null,"activeDate":null,"setApartDate":null},{"id":54599877,"name":"Ward FSY Representative","member":{"id":100230,"name":"Hyde, Amelia"},"activeDate":"2024-10-06","setApartDate":null}]},{"id":2532627,"name":"Sunday School Presidency","callings":[{"id":63194184,"name":"Sunday School President","member":{"id":100046,"name":"Lund, Peter"},"activeDate":"2025-06-08","setApartDate":"2025-06-29"},{"id":63574943,"name":"Sunday School First Counselor","member":{"id":100103,"name":"Page, Elias"},"activeDate":"2025-08-10","setApartDate":null},{"id":"2532627-Sunday School Second Counselor","name":"Sunday School Second Counselor","member":null,"activeDate":null,"setApartDate":null},{"id":"2532627-Sunday School Secretary","name":"Sunday School Secretary","member":null,"activeDate":null,"setApartDate":null}]},{"id":404666,"name":"Sunday School - Gospel Doctrine","callings":[{"id":54698897,"name":"Sunday School Teacher","member":{"id":100084,"name":"Romney, Ruth"},"activeDate":"2024-10-27","setApartDate":"2024-12-01"},{"id":64139083,"name":"Sunday School Teacher","member":{"id":100172,"name":"Falabella, Howard"},"activeDate":"2025-11-09","setApartDate":"2025-11-16"},{"id":63450504,"name":"Sunday School Class President","member":{"id":100316,"name":"Rasband, Sidney"},"activeDate":"2025-07-20","setApartDate":"2025-07-27"}]},{"id":1464178,"name":"Sunday School - Course 16+","callings":[{"id":63112409,"name":"Sunday School Teacher","member":{"id":100209,"name":"Young, Earl"},"activeDate":"2025-06-01","setApartDate":"2025-06-01"},{"id":63112467,"name":"Sunday School Teacher","member":{"id":100251,"name":"McKay, Neil"},"activeDate":"2025-06-01","setApartDate":"2025-06-08"}]},{"id":1969766,"name":"Sunday School - Course 13, 14, & 15","callings":[{"id":63249362,"name":"Sunday School Teacher","member":{"id":100017,"name":"Renlund, Eve"},"activeDate":"2025-06-15","setApartDate":"2025-07-13"},{"id":63289462,"name":"Sunday School Teacher","member":{"id":100298,"name":"Kimball, Ardeth"},"activeDate":"2025-06-22","setApartDate":"2025-06-29"}]},{"id":1859142,"name":"Sunday School - Course 11, Course 12","callings":[{"id":63367060,"name":"Sunday School Teacher","member":{"id":100055,"name":"Hales, Abigail"},"activeDate":"2025-07-06","setApartDate":"2025-07-20"},{"id":54742717,"name":"Sunday School Teacher","member":{"id":100146,"name":"Funk, Ida"},"activeDate":"2024-11-03","setApartDate":"2024-11-03"}]},{"id":3962181,"name":"Sunday School - Unassigned Teachers","callings":[{"id":23836194,"name":"Sunday School Teacher","member":{"id":100249,"name":"Kopischke, Chieko"},"activeDate":"2012-11-04","setApartDate":null}]},{"id":3962179,"name":"Sunday School - Resource Center","callings":[{"id":50127923,"name":"Resource Center Specialist","member":{"id":100091,"name":"Simpson, Ruth"},"activeDate":"2022-08-14","setApartDate":"2022-08-14"},{"id":30223812,"name":"Resource Center Specialist","member":{"id":100284,"name":"Simpson, Phoebe"},"activeDate":"2006-06-25","setApartDate":"2006-06-25"}]},{"id":2454015,"name":"Primary Presidency","callings":[{"id":53381866,"name":"Primary President","member":{"id":100319,"name":"Eyring, Eve"},"activeDate":"2024-03-24","setApartDate":"2024-03-24"},{"id":53381903,"name":"Primary First Counselor","member":{"id":100076,"name":"Bateman, Dorcas"},"activeDate":"2024-03-24","setApartDate":"2024-03-24"},{"id":53381986,"name":"Primary Second Counselor","member":{"id":100134,"name":"Bednar, Charity"},"activeDate":"2024-03-24","setApartDate":"2024-03-24"},{"id":53382028,"name":"Primary Secretary","member":{"id":100002,"name":"Bowen, Ardeth"},"activeDate":"2024-03-24","setApartDate":"2024-05-05"}]},{"id":3962177,"name":"Primary - Music","callings":[{"id":38535693,"name":"Primary Pianist","member":{"id":100261,"name":"Richards, Faith"},"activeDate":"2017-06-18","setApartDate":"2017-06-25"},{"id":53056433,"name":"Primary Music Leader","member":{"id":100170,"name":"Falabella, Clara"},"activeDate":"2024-02-04","setApartDate":"2024-02-04"}]},{"id":9400581,"name":"Primary - Valiant 9, Valiant 10","callings":[{"id":53051654,"name":"Primary Teacher","member":{"id":100082,"name":"McConkie, Phoebe"},"activeDate":"2022-12-25","setApartDate":"2024-02-04"},{"id":53051675,"name":"Primary Teacher","member":{"id":100314,"name":"Merrill, Sheri"},"activeDate":"2022-12-25","setApartDate":"2024-02-04"}]},{"id":9760312,"name":"Primary - CTR 6,7,8","callings":[{"id":44946186,"name":"Primary Teacher","member":{"id":100165,"name":"Packer, Craig"},"activeDate":"2019-10-20","setApartDate":"2023-08-27"},{"id":47406199,"name":"Primary Teacher","member":{"id":100168,"name":"Packer, Elisabeth"},"activeDate":"2021-01-24","setApartDate":"2021-07-11"}]},{"id":404673,"name":"Primary - CTR 4, CTR 5","callings":[{"id":51862821,"name":"Primary Teacher","member":{"id":100160,"name":"Condie, Adelaide"},"activeDate":"2023-07-02","setApartDate":"2023-09-03"},{"id":51933646,"name":"Primary Teacher","member":{"id":100307,"name":"Petersen, Patience"},"activeDate":"2023-07-16","setApartDate":"2023-08-06"}]},{"id":9760285,"name":"Primary - Sunbeam","callings":[{"id":64412339,"name":"Primary Teacher","member":{"id":100120,"name":"Rasband, Emily"},"activeDate":"2024-05-05","setApartDate":"2026-01-03"},{"id":64412347,"name":"Primary Teacher","member":{"id":100287,"name":"Grant, Bertha"},"activeDate":"2021-07-25","setApartDate":"2026-01-03"}]},{"id":1782705,"name":"Primary - Nursery","callings":[{"id":53051777,"name":"Nursery Leader","member":{"id":100058,"name":"Tuttle, Lavina"},"activeDate":"2022-01-02","setApartDate":"2024-02-04"},{"id":64267395,"name":"Nursery Leader","member":{"id":100250,"name":"McKay, Jane"},"activeDate":"2025-06-01","setApartDate":"2026-01-03"}]},{"id":3962178,"name":"Primary - Unassigned Teachers","callings":[{"id":"3962178-Primary Teacher","name":"Primary Teacher","member":null,"activeDate":null,"setApartDate":null}]},{"id":8697553,"name":"Primary Activities - Boys","callings":[{"id":51830187,"name":"Valiant Activities Leader","member":{"id":100136,"name":"Bednar, Timothy"},"activeDate":"2023-06-25","setApartDate":"2023-08-27"},{"id":64363375,"name":"Valiant Activities Leader","member":{"id":100286,"name":"Simpson, Joseph"},"activeDate":"2025-12-21","setApartDate":"2025-12-28"}]},{"id":5256259,"name":"Primary Activities - Girls","callings":[{"id":53056647,"name":"Valiant Activities Leader","member":null,"activeDate":"2026-01-25","setApartDate":null},{"id":51478091,"name":"Valiant Activities Leader","member":null,"activeDate":"2026-01-25","setApartDate":null}]},{"id":1098998,"name":"Ward Missionaries","callings":[{"id":63112533,"name":"Ward Mission Leader","member":{"id":100289,"name":"Faust, Noah"},"activeDate":"2025-06-01","setApartDate":"2025-06-01"},{"id":"1098998-Assistant Ward Mission Leader","name":"Assistant Ward Mission Leader","member":null,"activeDate":null,"setApartDate":null},{"id":46965211,"name":"Ward Missionary","member":{"id":100175,"name":"Tingey, Jedediah"},"activeDate":"2021-02-07","setApartDate":"2021-08-12"},{"id":46965284,"name":"Ward Missionary","member":{"id":100176,"name":"Tingey, Mary"},"activeDate":"2021-02-07","setApartDate":"2021-08-12"},{"id":64363484,"name":"Ward Missionary","member":{"id":100244,"name":"Bangerter, Ardeth"},"activeDate":"2025-12-21","setApartDate":"2025-12-28"},{"id":64363371,"name":"Ward Missionary","member":{"id":100245,"name":"Bangerter, Hosea"},"activeDate":"2025-12-21","setApartDate":"2025-12-28"},{"id":"1098998-Missionary Support Specialist","name":"Missionary Support Specialist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098998-Missionary Support Specialist","name":"Missionary Support Specialist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098998-Missionary Support Specialist","name":"Missionary Support Specialist","member":null,"activeDate":null,"setApartDate":null}]},{"id":-5,"name":"Full-Time Missionaries","callings":[{"id":-1,"name":"Missionary","member":{"id":100012,"name":"Lee, Peter"},"activeDate":"2025-03-17","setApartDate":null},{"id":-1,"name":"Missionary","member":{"id":100147,"name":"Stevenson, Brigham"},"activeDate":"2024-08-19","setApartDate":null}]},{"id":1098995,"name":"Temple and Family History","callings":[{"id":63289247,"name":"Ward Temple and Family History Leader","member":{"id":100197,"name":"Worthen, Titus"},"activeDate":"2025-06-22","setApartDate":null},{"id":50790168,"name":"Ward Temple and Family History Consultant","member":{"id":100041,"name":"Pratt, Naomi"},"activeDate":"2022-12-25","setApartDate":"2024-07-01"},{"id":63312173,"name":"Ward Temple and Family History Consultant","member":{"id":100071,"name":"Harris, Louie"},"activeDate":"2024-02-04","setApartDate":null},{"id":49232014,"name":"Ward Temple and Family History Consultant","member":{"id":100097,"name":"Grant, Barnabas"},"activeDate":"2022-03-13","setApartDate":"2022-03-20"},{"id":53106192,"name":"Ward Temple and Family History Consultant","member":{"id":100124,"name":"Cook, Emily"},"activeDate":"2024-02-11","setApartDate":"2024-03-10"},{"id":54742926,"name":"Ward Temple and Family History Consultant","member":{"id":100133,"name":"Samuelson, Phoebe"},"activeDate":"2024-11-03","setApartDate":"2024-11-24"},{"id":47958752,"name":"Ward Temple and Family History Consultant","member":{"id":100198,"name":"Worthen, Joy"},"activeDate":"2021-08-22","setApartDate":"2024-07-01"},{"id":63312103,"name":"Ward Temple and Family History Consultant","member":{"id":100227,"name":"Hyde, Lois"},"activeDate":"2024-11-10","setApartDate":null},{"id":63312172,"name":"Ward Temple and Family History Consultant","member":{"id":100260,"name":"Richards, Stephen"},"activeDate":"2024-07-28","setApartDate":null},{"id":"1098995-Ward Temple and Family History Consultant","name":"Ward Temple and Family History Consultant","member":null,"activeDate":null,"setApartDate":null},{"id":"1098995-Indexing Worker","name":"Indexing Worker","member":null,"activeDate":null,"setApartDate":null}]},{"id":404690,"name":"Other Callings - Young Single Adult","callings":[{"id":"404690-Relief Society Adviser to Young Single Adult Sisters","name":"Relief Society Adviser to Young Single Adult Sisters","member":null,"activeDate":null,"setApartDate":null},{"id":"404690-Young Single Adult Adviser","name":"Young Single Adult Adviser","member":null,"activeDate":null,"setApartDate":null},{"id":"404690-Young Single Adult Leader","name":"Young Single Adult Leader","member":null,"activeDate":null,"setApartDate":null},{"id":"404690-Young Single Adult Committee Chair","name":"Young Single Adult Committee Chair","member":null,"activeDate":null,"setApartDate":null},{"id":"404690-Young Single Adult Committee Member","name":"Young Single Adult Committee Member","member":null,"activeDate":null,"setApartDate":null},{"id":55258119,"name":"Single Adult Representative","member":{"id":100261,"name":"Richards, Faith"},"activeDate":"2025-01-26","setApartDate":null}]},{"id":3962175,"name":"Other Callings - Church Magazines","callings":[{"id":"3962175-Magazine Representative","name":"Magazine Representative","member":null,"activeDate":null,"setApartDate":null}]},{"id":1098994,"name":"Other Callings - Facilities","callings":[{"id":63243247,"name":"Building Representative","member":{"id":100059,"name":"Kopischke, Amelia"},"activeDate":"2025-03-16","setApartDate":"2025-06-15"},{"id":"1098994-Scheduler--Building  1","name":"Scheduler--Building  1","member":null,"activeDate":null,"setApartDate":null},{"id":"1098994-Scheduler--Building  2","name":"Scheduler--Building  2","member":null,"activeDate":null,"setApartDate":null},{"id":"1098994-Scheduler--Building  3","name":"Scheduler--Building  3","member":null,"activeDate":null,"setApartDate":null},{"id":"1098994-Scheduler--Building  4","name":"Scheduler--Building  4","member":null,"activeDate":null,"setApartDate":null},{"id":"1098994-Scheduler--Building  5","name":"Scheduler--Building  5","member":null,"activeDate":null,"setApartDate":null}]},{"id":9047476,"name":"Other Callings - For the Strength of Youth","callings":[{"id":"9047476-FSY Conferences Representative","name":"FSY Conferences Representative","member":null,"activeDate":null,"setApartDate":null}]},{"id":3962176,"name":"Other Callings - History","callings":[{"id":48542956,"name":"History Specialist","member":{"id":100076,"name":"Bateman, Dorcas"},"activeDate":"2021-12-05","setApartDate":null}]},{"id":1098996,"name":"Other Callings - Music","callings":[{"id":"1098996-Priesthood Pianist or Organist","name":"Priesthood Pianist or Organist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098996-Priesthood Music Director","name":"Priesthood Music Director","member":null,"activeDate":null,"setApartDate":null},{"id":"1098996-Choir Accompanist","name":"Choir Accompanist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098996-Music Adviser","name":"Music Adviser","member":null,"activeDate":null,"setApartDate":null},{"id":54698709,"name":"Choir Director","member":{"id":100099,"name":"Grant, Phoebe"},"activeDate":"2024-10-27","setApartDate":"2024-10-27"},{"id":45493233,"name":"Accompanist","member":{"id":100127,"name":"Davies, Helen"},"activeDate":"2020-01-19","setApartDate":"2020-02-23"},{"id":45493348,"name":"Accompanist","member":{"id":100170,"name":"Falabella, Clara"},"activeDate":"2020-01-19","setApartDate":"2025-11-09"},{"id":54698765,"name":"Music Leader","member":{"id":100128,"name":"Davies, Hosea"},"activeDate":"2024-10-27","setApartDate":"2024-11-03"},{"id":46965339,"name":"Music Coordinator","member":{"id":100001,"name":"Worthen, Janet"},"activeDate":"2021-02-07","setApartDate":null},{"id":52490582,"name":"Accompanist","member":{"id":100291,"name":"Faust, Harold"},"activeDate":"2023-10-29","setApartDate":"2023-12-03"}]},{"id":1098997,"name":"Other Callings - Technology","callings":[{"id":54816490,"name":"Email Communication Specialist","member":{"id":100114,"name":"Christofferson, Jane"},"activeDate":"2024-11-17","setApartDate":"2024-11-24"},{"id":50290626,"name":"Technology Specialist","member":{"id":100197,"name":"Worthen, Titus"},"activeDate":"2022-09-11","setApartDate":"2022-09-11"},{"id":"1098997-Ward/Branch Interpreter","name":"Ward/Branch Interpreter","member":null,"activeDate":null,"setApartDate":null},{"id":"1098997-Facebook Administrator","name":"Facebook Administrator","member":null,"activeDate":null,"setApartDate":null}]},{"id":1098993,"name":"Other Callings - Welfare and Self-Reliance","callings":[{"id":"1098993-Disability Activity Leader","name":"Disability Activity Leader","member":null,"activeDate":null,"setApartDate":null},{"id":"1098993-Disability Specialist","name":"Disability Specialist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098993-Welfare and Self-Reliance Specialist","name":"Welfare and Self-Reliance Specialist","member":null,"activeDate":null,"setApartDate":null},{"id":"1098993-Self-Reliance Group Facilitator","name":"Self-Reliance Group Facilitator","member":null,"activeDate":null,"setApartDate":null},{"id":46965104,"name":"Emergency Preparedness Specialist","member":{"id":100141,"name":"Widtsoe, Isaac"},"activeDate":"2021-02-07","setApartDate":null},{"id":47592726,"name":"Ward Public Affairs-Just Serve","member":{"id":100085,"name":"Romney, Hartman"},"activeDate":"2021-06-13","setApartDate":null}]},{"id":5541273,"name":"Other Callings - Additional Callings","callings":[{"id":64225143,"name":"Family Home Evening Coordinator","member":{"id":100029,"name":"Oaks, Elaine"},"activeDate":"2025-11-23","setApartDate":null},{"id":64225113,"name":"Family Home Evening Coordinator","member":{"id":100030,"name":"Oaks, Adam"},"activeDate":"2025-11-23","setApartDate":null},{"id":63450229,"name":"Linger Longer coordinator","member":{"id":100323,"name":"Woodruff, Harold"},"activeDate":"2025-07-20","setApartDate":"2025-07-27"}]},{"id":"out-of-unit","name":"Out of Unit Callings","callings":[{"id":63791300,"name":"Stake Presidency Second Counselor","member":{"id":100010,"name":"Lee, Marion"},"activeDate":"2025-09-14","setApartDate":"2025-09-14"},{"id":45387207,"name":"Stake Building Specialist","member":{"id":100130,"name":"Uchtdorf, Samuel"},"activeDate":"2020-01-05","setApartDate":null},{"id":55132451,"name":"Self Reliance Facilitator","member":{"id":100192,"name":"Aoyagi, Eli"},"activeDate":"2025-01-12","setApartDate":"2025-01-15"},{"id":63398075,"name":"Stake Men's Pickleball Specialist","member":{"id":100192,"name":"Aoyagi, Eli"},"activeDate":"2025-07-13","setApartDate":"2025-09-07"},{"id":55132433,"name":"Self Reliance Facilitator","member":{"id":100193,"name":"Aoyagi, Bonnie"},"activeDate":"2025-01-12","setApartDate":"2025-01-15"},{"id":52094263,"name":"Audit Committee Member","member":{"id":100229,"name":"Hyde, Stephen"},"activeDate":"2023-08-13","setApartDate":null},{"id":51929600,"name":"Stake High Councilor","member":{"id":100229,"name":"Hyde, Stephen"},"activeDate":"2023-07-16","setApartDate":"2023-07-23"},{"id":52094269,"name":"Stake Building Representative","member":{"id":100229,"name":"Hyde, Stephen"},"activeDate":"2023-08-13","setApartDate":"2023-08-15"},{"id":64080340,"name":"Stake Sunday School President","member":{"id":100279,"name":"Romney, Spencer"},"activeDate":"2025-10-26","setApartDate":null},{"id":64080335,"name":"Stake High Councilor","member":{"id":100279,"name":"Romney, Spencer"},"activeDate":"2025-10-26","setApartDate":"2025-11-02"},{"id":51116681,"name":"Church Service Mission - Addiction Recovery Program","member":{"id":100319,"name":"Eyring, Eve"},"activeDate":"2023-02-05","setApartDate":"2023-02-06"}]}]};
 
-        const demoMembers = [{"nameFormats":{"listPreferredLocal":"Smith, Joseph","givenPreferredLocal":"Joseph","familyPreferredLocal":"Smith"},"uuid":"member-1001","age":38,"legacyCmisId":1001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Young, Brigham","givenPreferredLocal":"Brigham","familyPreferredLocal":"Young"},"uuid":"member-1002","age":46,"legacyCmisId":1002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Cowdery, Oliver","givenPreferredLocal":"Oliver","familyPreferredLocal":"Cowdery"},"uuid":"member-1003","age":33,"legacyCmisId":1003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Kimball, Heber C.","givenPreferredLocal":"Heber C.","familyPreferredLocal":"Kimball"},"uuid":"member-1004","age":41,"legacyCmisId":1004,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Richards, Willard","givenPreferredLocal":"Willard","familyPreferredLocal":"Richards"},"uuid":"member-1005","age":39,"legacyCmisId":1005,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Grant, Heber J.","givenPreferredLocal":"Heber J.","familyPreferredLocal":"Grant"},"uuid":"member-1006","age":52,"legacyCmisId":1006,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Taylor, John","givenPreferredLocal":"John","familyPreferredLocal":"Taylor"},"uuid":"member-2001","age":45,"legacyCmisId":2001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Woodruff, Wilford","givenPreferredLocal":"Wilford","familyPreferredLocal":"Woodruff"},"uuid":"member-2002","age":44,"legacyCmisId":2002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Snow, Lorenzo","givenPreferredLocal":"Lorenzo","familyPreferredLocal":"Snow"},"uuid":"member-2003","age":50,"legacyCmisId":2003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Packer, Boyd K.","givenPreferredLocal":"Boyd K.","familyPreferredLocal":"Packer"},"uuid":"member-2004","age":55,"legacyCmisId":2004,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Holland, Jeffrey R.","givenPreferredLocal":"Jeffrey R.","familyPreferredLocal":"Holland"},"uuid":"member-2011","age":54,"legacyCmisId":2011,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Bednar, David A.","givenPreferredLocal":"David A.","familyPreferredLocal":"Bednar"},"uuid":"member-2012","age":48,"legacyCmisId":2012,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Cook, Quentin L.","givenPreferredLocal":"Quentin L.","familyPreferredLocal":"Cook"},"uuid":"member-2021","age":46,"legacyCmisId":2021,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Ballard, M. Russell","givenPreferredLocal":"M. Russell","familyPreferredLocal":"Ballard"},"uuid":"member-2031","age":51,"legacyCmisId":2031,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Smith, Emma","givenPreferredLocal":"Emma","familyPreferredLocal":"Smith"},"uuid":"member-3001","age":39,"legacyCmisId":3001,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Snow, Eliza R.","givenPreferredLocal":"Eliza R.","familyPreferredLocal":"Snow"},"uuid":"member-3002","age":42,"legacyCmisId":3002,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Wells, Emmeline B.","givenPreferredLocal":"Emmeline B.","familyPreferredLocal":"Wells"},"uuid":"member-3003","age":38,"legacyCmisId":3003,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Young, Zina D.","givenPreferredLocal":"Zina D.","familyPreferredLocal":"Young"},"uuid":"member-3004","age":35,"legacyCmisId":3004,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Cannon, Martha Hughes","givenPreferredLocal":"Martha Hughes","familyPreferredLocal":"Cannon"},"uuid":"member-3011","age":40,"legacyCmisId":3011,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Kapp, Ardeth G.","givenPreferredLocal":"Ardeth G.","familyPreferredLocal":"Kapp"},"uuid":"member-3012","age":45,"legacyCmisId":3012,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Smoot, Mary Ellen","givenPreferredLocal":"Mary Ellen","familyPreferredLocal":"Smoot"},"uuid":"member-3021","age":41,"legacyCmisId":3021,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Jack, Elaine L.","givenPreferredLocal":"Elaine L.","familyPreferredLocal":"Jack"},"uuid":"member-3031","age":40,"legacyCmisId":3031,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Richards, Franklin D.","givenPreferredLocal":"Franklin D.","familyPreferredLocal":"Richards"},"uuid":"member-4001","age":50,"legacyCmisId":4001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"McKay, David O.","givenPreferredLocal":"David O.","familyPreferredLocal":"McKay"},"uuid":"member-4003","age":48,"legacyCmisId":4003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Lee, Harold B.","givenPreferredLocal":"Harold B.","familyPreferredLocal":"Lee"},"uuid":"member-4011","age":50,"legacyCmisId":4011,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Kimball, Spencer W.","givenPreferredLocal":"Spencer W.","familyPreferredLocal":"Kimball"},"uuid":"member-4012","age":53,"legacyCmisId":4012,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Reeve, Aurelia Spencer","givenPreferredLocal":"Aurelia Spencer","familyPreferredLocal":"Reeve"},"uuid":"member-5001","age":44,"legacyCmisId":5001,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Rogers, Louie B.","givenPreferredLocal":"Louie B.","familyPreferredLocal":"Rogers"},"uuid":"member-5002","age":40,"legacyCmisId":5002,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Dew, Sheri L.","givenPreferredLocal":"Sheri L.","familyPreferredLocal":"Dew"},"uuid":"member-5003","age":43,"legacyCmisId":5003,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Madsen, Carol F.","givenPreferredLocal":"Carol F.","familyPreferredLocal":"Madsen"},"uuid":"member-5004","age":41,"legacyCmisId":5004,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Okazaki, Chieko N.","givenPreferredLocal":"Chieko N.","familyPreferredLocal":"Okazaki"},"uuid":"member-5011","age":44,"legacyCmisId":5011,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Winder, Barbara W.","givenPreferredLocal":"Barbara W.","familyPreferredLocal":"Winder"},"uuid":"member-5012","age":43,"legacyCmisId":5012,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Reeve, Elmina Shepard","givenPreferredLocal":"Elmina Shepard","familyPreferredLocal":"Reeve"},"uuid":"member-6001","age":39,"legacyCmisId":6001,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Gates, Susa Young","givenPreferredLocal":"Susa Young","familyPreferredLocal":"Gates"},"uuid":"member-6002","age":37,"legacyCmisId":6002,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Tanner, Susan W.","givenPreferredLocal":"Susan W.","familyPreferredLocal":"Tanner"},"uuid":"member-6004","age":42,"legacyCmisId":6004,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Beck, Julie B.","givenPreferredLocal":"Julie B.","familyPreferredLocal":"Beck"},"uuid":"member-6011","age":39,"legacyCmisId":6011,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Benson, Ezra Taft","givenPreferredLocal":"Ezra Taft","familyPreferredLocal":"Benson"},"uuid":"member-7001","age":48,"legacyCmisId":7001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Hinckley, Gordon B.","givenPreferredLocal":"Gordon B.","familyPreferredLocal":"Hinckley"},"uuid":"member-7002","age":51,"legacyCmisId":7002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Hunter, Howard W.","givenPreferredLocal":"Howard W.","familyPreferredLocal":"Hunter"},"uuid":"member-7003","age":49,"legacyCmisId":7003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Monson, Thomas S.","givenPreferredLocal":"Thomas S.","familyPreferredLocal":"Monson"},"uuid":"member-8201","age":54,"legacyCmisId":8201,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Richards, Samuel","givenPreferredLocal":"Samuel","familyPreferredLocal":"Richards"},"uuid":"member-8111","age":16,"legacyCmisId":8111,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Romney, Joshua","givenPreferredLocal":"Joshua","familyPreferredLocal":"Romney"},"uuid":"member-8112","age":17,"legacyCmisId":8112,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Haight, David B.","givenPreferredLocal":"David B.","familyPreferredLocal":"Haight"},"uuid":"member-9001","age":52,"legacyCmisId":9001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Alma","givenPreferredLocal":"Alma","familyPreferredLocal":""},"uuid":"member-10001","age":44,"legacyCmisId":10001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Nephi","givenPreferredLocal":"Nephi","familyPreferredLocal":""},"uuid":"member-10002","age":28,"legacyCmisId":10002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Ammon","givenPreferredLocal":"Ammon","familyPreferredLocal":""},"uuid":"member-10003","age":30,"legacyCmisId":10003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Pingree, Anne C.","givenPreferredLocal":"Anne C.","familyPreferredLocal":"Pingree"},"uuid":"member-11001","age":37,"legacyCmisId":11001,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Faust, Ruth Wright","givenPreferredLocal":"Ruth Wright","familyPreferredLocal":"Faust"},"uuid":"member-11002","age":42,"legacyCmisId":11002,"sex":"F"},{"nameFormats":{"listPreferredLocal":"McConkie, Amelia","givenPreferredLocal":"Amelia","familyPreferredLocal":"McConkie"},"uuid":"member-11003","age":36,"legacyCmisId":11003,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Moroni","givenPreferredLocal":"Moroni","familyPreferredLocal":""},"uuid":"member-12001","age":32,"legacyCmisId":12001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Pratt, Parley P.","givenPreferredLocal":"Parley P.","familyPreferredLocal":"Pratt"},"uuid":"member-90001","age":42,"legacyCmisId":90001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Eyring, Henry B.","givenPreferredLocal":"Henry B.","familyPreferredLocal":"Eyring"},"uuid":"member-90002","age":45,"legacyCmisId":90002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Uchtdorf, Dieter F.","givenPreferredLocal":"Dieter F.","familyPreferredLocal":"Uchtdorf"},"uuid":"member-90003","age":43,"legacyCmisId":90003,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Christofferson, D. Todd","givenPreferredLocal":"D. Todd","familyPreferredLocal":"Christofferson"},"uuid":"member-90004","age":44,"legacyCmisId":90004,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Mormon","givenPreferredLocal":"Mormon","familyPreferredLocal":""},"uuid":"member-90005","age":50,"legacyCmisId":90005,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Helaman","givenPreferredLocal":"Helaman","familyPreferredLocal":""},"uuid":"member-90006","age":35,"legacyCmisId":90006,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Lehi","givenPreferredLocal":"Lehi","familyPreferredLocal":""},"uuid":"member-90007","age":55,"legacyCmisId":90007,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Abish","givenPreferredLocal":"Abish","familyPreferredLocal":""},"uuid":"member-90008","age":29,"legacyCmisId":90008,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Sariah","givenPreferredLocal":"Sariah","familyPreferredLocal":""},"uuid":"member-90009","age":50,"legacyCmisId":90009,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Young, Elizabeth","givenPreferredLocal":"Elizabeth","familyPreferredLocal":"Young"},"uuid":"member-90010","age":33,"legacyCmisId":90010,"sex":"F"},{"nameFormats":{"listPreferredLocal":"Ether","givenPreferredLocal":"Ether","familyPreferredLocal":""},"uuid":"member-91001","age":16,"legacyCmisId":91001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Samuel (the Lamanite)","givenPreferredLocal":"Samuel","familyPreferredLocal":""},"uuid":"member-91002","age":17,"legacyCmisId":91002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Smith, George Albert","givenPreferredLocal":"George Albert","familyPreferredLocal":"Smith"},"uuid":"member-80001","age":46,"legacyCmisId":80001,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Smith, Joseph F.","givenPreferredLocal":"Joseph F.","familyPreferredLocal":"Smith"},"uuid":"member-80002","age":52,"legacyCmisId":80002,"sex":"M"},{"nameFormats":{"listPreferredLocal":"Smith, Hyrum","givenPreferredLocal":"Hyrum","familyPreferredLocal":"Smith"},"uuid":"member-80003","age":50,"legacyCmisId":80003,"sex":"M"}];
+        const demoMembers = [{"id":100001,"name":"Worthen, Janet","age":66,"gender":"F"},{"id":100002,"name":"Bowen, Ardeth","age":30,"gender":"F"},{"id":100003,"name":"Bowen, Carlos","age":5,"gender":"M"},{"id":100004,"name":"Bowen, Julie","age":3,"gender":"F"},{"id":100005,"name":"Bowen, Spencer","age":1,"gender":"M"},{"id":100006,"name":"Bowen, Zoram","age":29,"gender":"M"},{"id":100007,"name":"Clawson, Pahoran","age":21,"gender":"M"},{"id":100008,"name":"Lee, Leonora","age":11,"gender":"F"},{"id":100009,"name":"Wirthlin, Lois","age":47,"gender":"F"},{"id":100010,"name":"Lee, Marion","age":46,"gender":"M"},{"id":100011,"name":"Lee, Emily","age":17,"gender":"F"},{"id":100012,"name":"Lee, Peter","age":19,"gender":"M"},{"id":100013,"name":"Lee, Rebecca","age":44,"gender":"F"},{"id":100014,"name":"Lee, Thomas","age":14,"gender":"M"},{"id":100015,"name":"Clawson, Ida","age":62,"gender":"F"},{"id":100016,"name":"Renlund, Ezekiel","age":7,"gender":"M"},{"id":100017,"name":"Renlund, Eve","age":43,"gender":"F"},{"id":100018,"name":"Renlund, Enos","age":46,"gender":"M"},{"id":100019,"name":"Renlund, Margaret","age":15,"gender":"F"},{"id":100020,"name":"Renlund, Samuel","age":17,"gender":"M"},{"id":100021,"name":"Renlund, Andrew","age":13,"gender":"M"},{"id":100022,"name":"Young, Lucile","age":15,"gender":"F"},{"id":100023,"name":"Young, Rhoda","age":11,"gender":"F"},{"id":100024,"name":"Young, Eliza","age":13,"gender":"F"},{"id":100025,"name":"Young, Sophia","age":38,"gender":"F"},{"id":100026,"name":"Young, Clara","age":9,"gender":"F"},{"id":100027,"name":"Young, Brent","age":42,"gender":"M"},{"id":100028,"name":"Dunn, Donald","age":43,"gender":"M"},{"id":100029,"name":"Oaks, Elaine","age":71,"gender":"F"},{"id":100030,"name":"Oaks, Adam","age":73,"gender":"M"},{"id":100031,"name":"Callis, Naomi","age":65,"gender":"F"},{"id":100032,"name":"Wells, Emma","age":19,"gender":"F"},{"id":100033,"name":"Benson, Sophia","age":77,"gender":"F"},{"id":100034,"name":"Benson, Russell","age":87,"gender":"M"},{"id":100035,"name":"Rich, Teancum","age":56,"gender":"M"},{"id":100036,"name":"Rich, Esther","age":62,"gender":"F"},{"id":100037,"name":"Pace, Belle","age":82,"gender":"F"},{"id":100038,"name":"Lyman, Camilla","age":80,"gender":"F"},{"id":100039,"name":"Cordon, Zeniff","age":42,"gender":"M"},{"id":100040,"name":"Hyde, Carol","age":88,"gender":"F"},{"id":100041,"name":"Pratt, Naomi","age":75,"gender":"F"},{"id":100042,"name":"Lund, Cora","age":12,"gender":"F"},{"id":100043,"name":"Perry, Joseph","age":39,"gender":"M"},{"id":100044,"name":"Lund, Moses","age":6,"gender":"M"},{"id":100045,"name":"Lund, Heber","age":4,"gender":"M"},{"id":100046,"name":"Lund, Peter","age":39,"gender":"M"},{"id":100047,"name":"Lund, Jared","age":10,"gender":"M"},{"id":100048,"name":"Lund, Silas","age":4,"gender":"M"},{"id":100049,"name":"Lund, Martha","age":35,"gender":"F"},{"id":100050,"name":"Talmage, Gary","age":60,"gender":"M"},{"id":100051,"name":"Didier, Aurelia","age":65,"gender":"F"},{"id":100052,"name":"Whitmer, Dieter","age":22,"gender":"M"},{"id":100053,"name":"Whitmer, Alma","age":20,"gender":"M"},{"id":100054,"name":"Hales, Ezra","age":53,"gender":"M"},{"id":100055,"name":"Hales, Abigail","age":54,"gender":"F"},{"id":100056,"name":"Bangerter, Olive","age":71,"gender":"F"},{"id":100057,"name":"Tuttle, Barnabas","age":74,"gender":"M"},{"id":100058,"name":"Tuttle, Lavina","age":71,"gender":"F"},{"id":100059,"name":"Kopischke, Amelia","age":36,"gender":"F"},{"id":100060,"name":"McKay, Zeniff","age":54,"gender":"M"},{"id":100061,"name":"Hanks, Amy","age":71,"gender":"F"},{"id":100062,"name":"Jensen, Loren","age":33,"gender":"M"},{"id":100063,"name":"Jensen, Carol","age":3,"gender":"F"},{"id":100064,"name":"Jensen, LaVern","age":4,"gender":"F"},{"id":100065,"name":"Jensen, Rachel","age":39,"gender":"F"},{"id":100066,"name":"Jensen, Lydia","age":1,"gender":"F"},{"id":100067,"name":"Featherstone, Elaine","age":67,"gender":"F"},{"id":100068,"name":"Knight, Grace","age":72,"gender":"F"},{"id":100069,"name":"Harris, Ether","age":64,"gender":"M"},{"id":100070,"name":"Cowdery, Lydia","age":31,"gender":"F"},{"id":100071,"name":"Harris, Louie","age":52,"gender":"F"},{"id":100072,"name":"Alvarado, Mercy","age":13,"gender":"F"},{"id":100073,"name":"Alvarado, Ether","age":51,"gender":"M"},{"id":100074,"name":"Alvarado, Lucy","age":47,"gender":"F"},{"id":100075,"name":"Patten, Louie","age":87,"gender":"F"},{"id":100076,"name":"Bateman, Dorcas","age":73,"gender":"F"},{"id":100077,"name":"Bateman, Loren","age":72,"gender":"M"},{"id":100078,"name":"Hinckley, Anna","age":78,"gender":"F"},{"id":100079,"name":"Maxwell, Leah","age":32,"gender":"F"},{"id":100080,"name":"Andersen, Silas","age":48,"gender":"M"},{"id":100081,"name":"McConkie, Bruce","age":71,"gender":"M"},{"id":100082,"name":"McConkie, Phoebe","age":68,"gender":"F"},{"id":100083,"name":"Cowdery, Janette","age":0,"gender":"F"},{"id":100084,"name":"Romney, Ruth","age":80,"gender":"F"},{"id":100085,"name":"Romney, Hartman","age":82,"gender":"M"},{"id":100086,"name":"Eyring, Bonnie","age":35,"gender":"F"},{"id":100087,"name":"Alvarado, Paul","age":20,"gender":"M"},{"id":100088,"name":"Alvarado, Ezekiel","age":25,"gender":"M"},{"id":100089,"name":"Alvarado, Sarah","age":18,"gender":"F"},{"id":100090,"name":"Hillam, Carlos","age":43,"gender":"M"},{"id":100091,"name":"Simpson, Ruth","age":67,"gender":"F"},{"id":100092,"name":"Roberts, Matthew","age":25,"gender":"M"},{"id":100093,"name":"Roberts, Daniel","age":58,"gender":"M"},{"id":100094,"name":"Roberts, Phoebe","age":55,"gender":"F"},{"id":100095,"name":"Grant, Abish","age":21,"gender":"F"},{"id":100096,"name":"Grant, Clarissa","age":16,"gender":"F"},{"id":100097,"name":"Grant, Barnabas","age":52,"gender":"M"},{"id":100098,"name":"Grant, Tabitha","age":25,"gender":"F"},{"id":100099,"name":"Grant, Phoebe","age":49,"gender":"F"},{"id":100100,"name":"Faust, Philip","age":30,"gender":"M"},{"id":100101,"name":"Faust, Ruth","age":62,"gender":"F"},{"id":100102,"name":"Clayton, Carlos","age":78,"gender":"M"},{"id":100103,"name":"Page, Elias","age":76,"gender":"M"},{"id":100104,"name":"Page, Susa","age":74,"gender":"F"},{"id":100105,"name":"Kimball, Hosea","age":84,"gender":"M"},{"id":100106,"name":"Kimball, Abigail","age":80,"gender":"F"},{"id":100107,"name":"Ballard, Annie","age":18,"gender":"F"},{"id":100108,"name":"Ballard, Anna","age":49,"gender":"F"},{"id":100109,"name":"Petersen, Eli","age":36,"gender":"M"},{"id":100110,"name":"Stapley, Mosiah","age":23,"gender":"M"},{"id":100111,"name":"Stapley, Joseph","age":51,"gender":"M"},{"id":100112,"name":"Christofferson, Zoram","age":41,"gender":"M"},{"id":100113,"name":"Christofferson, Julia","age":5,"gender":"F"},{"id":100114,"name":"Christofferson, Jane","age":36,"gender":"F"},{"id":100115,"name":"Christofferson, Mabel","age":10,"gender":"F"},{"id":100116,"name":"Christofferson, Hartman","age":3,"gender":"M"},{"id":100117,"name":"Christofferson, Howard","age":1,"gender":"M"},{"id":100118,"name":"Christofferson, Abish","age":8,"gender":"F"},{"id":100119,"name":"Merrill, Benjamin","age":55,"gender":"M"},{"id":100120,"name":"Rasband, Emily","age":72,"gender":"F"},{"id":100121,"name":"Woodruff, Lavina","age":83,"gender":"F"},{"id":100122,"name":"Snow, Craig","age":47,"gender":"M"},{"id":100123,"name":"Cook, Hyrum","age":82,"gender":"M"},{"id":100124,"name":"Cook, Emily","age":80,"gender":"F"},{"id":100125,"name":"Marsh, Camilla","age":54,"gender":"F"},{"id":100126,"name":"Ivins, Naomi","age":23,"gender":"F"},{"id":100127,"name":"Davies, Helen","age":77,"gender":"F"},{"id":100128,"name":"Davies, Hosea","age":84,"gender":"M"},{"id":100129,"name":"Uchtdorf, Aurelia","age":69,"gender":"F"},{"id":100130,"name":"Uchtdorf, Samuel","age":71,"gender":"M"},{"id":100131,"name":"Poelman, Dorcas","age":54,"gender":"F"},{"id":100132,"name":"Rigdon, Lehi","age":52,"gender":"M"},{"id":100133,"name":"Samuelson, Phoebe","age":80,"gender":"F"},{"id":100134,"name":"Bednar, Charity","age":34,"gender":"F"},{"id":100135,"name":"Bednar, Joy","age":2,"gender":"F"},{"id":100136,"name":"Bednar, Timothy","age":37,"gender":"M"},{"id":100137,"name":"Smith, Marion","age":24,"gender":"M"},{"id":100138,"name":"Sitati, Jeffrey","age":41,"gender":"M"},{"id":100139,"name":"Bednar, Zoram","age":9,"gender":"M"},{"id":100140,"name":"Widtsoe, Adelaide","age":53,"gender":"F"},{"id":100141,"name":"Widtsoe, Isaac","age":56,"gender":"M"},{"id":100142,"name":"Kearon, Zoram","age":70,"gender":"M"},{"id":100143,"name":"Kearon, Leah","age":68,"gender":"F"},{"id":100144,"name":"Kearon, Milton","age":32,"gender":"M"},{"id":100145,"name":"Cannon, Spencer","age":42,"gender":"M"},{"id":100146,"name":"Funk, Ida","age":63,"gender":"F"},{"id":100147,"name":"Stevenson, Brigham","age":21,"gender":"M"},{"id":100148,"name":"Stevenson, Franklin","age":44,"gender":"M"},{"id":100149,"name":"Stevenson, Ruth","age":43,"gender":"F"},{"id":100150,"name":"Stevenson, Dieter","age":13,"gender":"M"},{"id":100151,"name":"Ashton, Russell","age":78,"gender":"M"},{"id":100152,"name":"Whitmer, Leah","age":41,"gender":"F"},{"id":100153,"name":"Morrison, Aurelia","age":24,"gender":"F"},{"id":100154,"name":"Morrison, James","age":19,"gender":"M"},{"id":100155,"name":"Morrison, Naomi","age":15,"gender":"F"},{"id":100156,"name":"Morrison, Jedediah","age":44,"gender":"M"},{"id":100157,"name":"Morrison, Anne","age":45,"gender":"F"},{"id":100158,"name":"Condie, Eldred","age":38,"gender":"M"},{"id":100159,"name":"Condie, Henry","age":10,"gender":"M"},{"id":100160,"name":"Condie, Adelaide","age":36,"gender":"F"},{"id":100161,"name":"Condie, Belle","age":7,"gender":"F"},{"id":100162,"name":"Condie, Jacob","age":4,"gender":"M"},{"id":100163,"name":"Winder, Zoram","age":71,"gender":"M"},{"id":100164,"name":"Romney, Titus","age":21,"gender":"M"},{"id":100165,"name":"Packer, Craig","age":62,"gender":"M"},{"id":100166,"name":"Packer, Eve","age":31,"gender":"F"},{"id":100167,"name":"Soares, Julia","age":22,"gender":"F"},{"id":100168,"name":"Packer, Elisabeth","age":64,"gender":"F"},{"id":100169,"name":"Burton, Elaine","age":85,"gender":"F"},{"id":100170,"name":"Falabella, Clara","age":59,"gender":"F"},{"id":100171,"name":"Falabella, Lois","age":25,"gender":"F"},{"id":100172,"name":"Falabella, Howard","age":60,"gender":"M"},{"id":100173,"name":"Taylor, Sarah","age":64,"gender":"F"},{"id":100174,"name":"Penrose, Patience","age":68,"gender":"F"},{"id":100175,"name":"Tingey, Jedediah","age":84,"gender":"M"},{"id":100176,"name":"Tingey, Mary","age":80,"gender":"F"},{"id":100177,"name":"Hunter, Elijah","age":52,"gender":"M"},{"id":100178,"name":"Hunter, Patience","age":16,"gender":"F"},{"id":100179,"name":"Rector, Naomi","age":32,"gender":"F"},{"id":100180,"name":"Callister, Philip","age":44,"gender":"M"},{"id":100181,"name":"Monson, Anne","age":67,"gender":"F"},{"id":100182,"name":"Monson, Dale","age":27,"gender":"M"},{"id":100183,"name":"Monson, Nephi","age":69,"gender":"M"},{"id":100184,"name":"Monson, Titus","age":29,"gender":"M"},{"id":100185,"name":"Holland, Eli","age":34,"gender":"M"},{"id":100186,"name":"Gong, Quentin","age":24,"gender":"M"},{"id":100187,"name":"Gong, Jedediah","age":58,"gender":"M"},{"id":100188,"name":"Scott, Marion","age":58,"gender":"M"},{"id":100189,"name":"Gong, Miriam","age":57,"gender":"F"},{"id":100190,"name":"Gong, Alma","age":21,"gender":"M"},{"id":100191,"name":"Haight, Amy","age":45,"gender":"F"},{"id":100192,"name":"Aoyagi, Eli","age":78,"gender":"M"},{"id":100193,"name":"Aoyagi, Bonnie","age":77,"gender":"F"},{"id":100194,"name":"Richards, Glen","age":22,"gender":"M"},{"id":100195,"name":"Nelson, Adelaide","age":56,"gender":"F"},{"id":100196,"name":"Paramore, Caleb","age":75,"gender":"M"},{"id":100197,"name":"Worthen, Titus","age":79,"gender":"M"},{"id":100198,"name":"Worthen, Joy","age":74,"gender":"F"},{"id":100199,"name":"Bowen, Eve","age":72,"gender":"F"},{"id":100200,"name":"Bowen, Ezekiel","age":70,"gender":"M"},{"id":100201,"name":"Bowen, Orrin","age":24,"gender":"M"},{"id":100202,"name":"Clawson, Janette","age":39,"gender":"F"},{"id":100203,"name":"Lee, Deborah","age":44,"gender":"F"},{"id":100204,"name":"Wirthlin, Sheri","age":76,"gender":"F"},{"id":100205,"name":"Renlund, Orrin","age":77,"gender":"M"},{"id":100206,"name":"Young, Ezekiel","age":3,"gender":"M"},{"id":100207,"name":"Young, Porter","age":7,"gender":"M"},{"id":100208,"name":"Young, Lamoni","age":6,"gender":"M"},{"id":100209,"name":"Young, Earl","age":35,"gender":"M"},{"id":100210,"name":"Young, Esther","age":35,"gender":"F"},{"id":100211,"name":"Young, Micah","age":1,"gender":"M"},{"id":100212,"name":"Dunn, Frances","age":63,"gender":"F"},{"id":100213,"name":"Oaks, Isabel","age":88,"gender":"F"},{"id":100214,"name":"Callis, Barbara","age":61,"gender":"F"},{"id":100215,"name":"Wells, Edith","age":64,"gender":"F"},{"id":100216,"name":"Benson, Noah","age":40,"gender":"M"},{"id":100217,"name":"Rich, Hartman","age":39,"gender":"M"},{"id":100218,"name":"Pace, Susan","age":47,"gender":"F"},{"id":100219,"name":"Lyman, Tabitha","age":47,"gender":"F"},{"id":100220,"name":"Rich, Bertha","age":71,"gender":"F"},{"id":100221,"name":"Cordon, Joshua","age":32,"gender":"M"},{"id":100222,"name":"Cordon, Helen","age":3,"gender":"F"},{"id":100223,"name":"Cordon, Harriet","age":0,"gender":"F"},{"id":100224,"name":"Cordon, Elijah","age":5,"gender":"M"},{"id":100225,"name":"Cordon, Hannah","age":31,"gender":"F"},{"id":100226,"name":"Hyde, Deborah","age":16,"gender":"F"},{"id":100227,"name":"Hyde, Lois","age":14,"gender":"F"},{"id":100228,"name":"Hyde, Jacob","age":9,"gender":"M"},{"id":100229,"name":"Hyde, Stephen","age":44,"gender":"M"},{"id":100230,"name":"Hyde, Amelia","age":41,"gender":"F"},{"id":100231,"name":"Pratt, Louise","age":65,"gender":"F"},{"id":100232,"name":"Pratt, Helen","age":38,"gender":"F"},{"id":100233,"name":"Pratt, Luke","age":72,"gender":"M"},{"id":100234,"name":"Pratt, Abish","age":35,"gender":"F"},{"id":100235,"name":"Lund, Mary","age":72,"gender":"F"},{"id":100236,"name":"Perry, Stephen","age":17,"gender":"M"},{"id":100237,"name":"Perry, LaVern","age":38,"gender":"F"},{"id":100238,"name":"Talmage, Clara","age":70,"gender":"F"},{"id":100239,"name":"Didier, Elizabeth","age":67,"gender":"F"},{"id":100240,"name":"Didier, Loren","age":77,"gender":"M"},{"id":100241,"name":"Whitmer, Peter","age":36,"gender":"M"},{"id":100242,"name":"Hales, Samuel","age":65,"gender":"M"},{"id":100243,"name":"Hales, Sheri","age":63,"gender":"F"},{"id":100244,"name":"Bangerter, Ardeth","age":72,"gender":"F"},{"id":100245,"name":"Bangerter, Hosea","age":75,"gender":"M"},{"id":100246,"name":"Tuttle, Sophia","age":71,"gender":"F"},{"id":100247,"name":"Wells, Camilla","age":44,"gender":"F"},{"id":100248,"name":"Kopischke, Loren","age":69,"gender":"M"},{"id":100249,"name":"Kopischke, Chieko","age":67,"gender":"F"},{"id":100250,"name":"McKay, Jane","age":60,"gender":"F"},{"id":100251,"name":"McKay, Neil","age":62,"gender":"M"},{"id":100252,"name":"Ivins, Abish","age":46,"gender":"F"},{"id":100253,"name":"Hanks, Adelaide","age":32,"gender":"F"},{"id":100254,"name":"Jensen, Merlin","age":18,"gender":"M"},{"id":100255,"name":"Jensen, Deborah","age":38,"gender":"F"},{"id":100256,"name":"Featherstone, Robert","age":80,"gender":"M"},{"id":100257,"name":"Featherstone, Susan","age":77,"gender":"F"},{"id":100258,"name":"Knight, Emma","age":67,"gender":"F"},{"id":100259,"name":"Harris, Seth","age":57,"gender":"M"},{"id":100260,"name":"Richards, Stephen","age":18,"gender":"M"},{"id":100261,"name":"Richards, Faith","age":42,"gender":"F"},{"id":100262,"name":"Cowdery, Moses","age":21,"gender":"M"},{"id":100263,"name":"Alvarado, Florence","age":4,"gender":"F"},{"id":100264,"name":"Alvarado, Harriet","age":27,"gender":"F"},{"id":100265,"name":"Patten, Dallin","age":21,"gender":"M"},{"id":100266,"name":"Bateman, Alvin","age":70,"gender":"M"},{"id":100267,"name":"Hinckley, Mosiah","age":70,"gender":"M"},{"id":100268,"name":"Maxwell, Martha","age":69,"gender":"F"},{"id":100269,"name":"Andersen, Helen","age":25,"gender":"F"},{"id":100270,"name":"Andersen, Boyd","age":29,"gender":"M"},{"id":100271,"name":"Andersen, Sheri","age":27,"gender":"F"},{"id":100272,"name":"Andersen, Calvin","age":56,"gender":"M"},{"id":100273,"name":"Andersen, Dorcas","age":53,"gender":"F"},{"id":100274,"name":"McConkie, Abraham","age":49,"gender":"M"},{"id":100275,"name":"McConkie, Isabel","age":15,"gender":"F"},{"id":100276,"name":"Romney, Willard","age":16,"gender":"M"},{"id":100277,"name":"Romney, Phoebe","age":14,"gender":"F"},{"id":100278,"name":"Romney, Hope","age":46,"gender":"F"},{"id":100279,"name":"Romney, Spencer","age":45,"gender":"M"},{"id":100280,"name":"Romney, Mercy","age":19,"gender":"F"},{"id":100281,"name":"Eyring, Abish","age":56,"gender":"F"},{"id":100282,"name":"Eyring, Monte","age":29,"gender":"M"},{"id":100283,"name":"Hillam, Minerva","age":51,"gender":"F"},{"id":100284,"name":"Simpson, Phoebe","age":71,"gender":"F"},{"id":100285,"name":"Roberts, Carlos","age":39,"gender":"M"},{"id":100286,"name":"Simpson, Joseph","age":71,"gender":"M"},{"id":100287,"name":"Grant, Bertha","age":75,"gender":"F"},{"id":100288,"name":"Faust, Cora","age":46,"gender":"F"},{"id":100289,"name":"Faust, Noah","age":46,"gender":"M"},{"id":100290,"name":"Faust, Jane","age":20,"gender":"F"},{"id":100291,"name":"Faust, Harold","age":18,"gender":"M"},{"id":100292,"name":"Faust, Leonora","age":16,"gender":"F"},{"id":100293,"name":"Rasband, Hosea","age":12,"gender":"M"},{"id":100294,"name":"Rasband, Mae","age":20,"gender":"F"},{"id":100295,"name":"Clayton, Orrin","age":60,"gender":"M"},{"id":100296,"name":"Page, Loren","age":38,"gender":"M"},{"id":100297,"name":"Kimball, Leonora","age":4,"gender":"F"},{"id":100298,"name":"Kimball, Ardeth","age":27,"gender":"F"},{"id":100299,"name":"Kimball, Ezra","age":30,"gender":"M"},{"id":100300,"name":"Ballard, Hope","age":27,"gender":"F"},{"id":100301,"name":"Kimball, Russell","age":2,"gender":"M"},{"id":100302,"name":"Ballard, Jedediah","age":2,"gender":"M"},{"id":100303,"name":"Ballard, Nathan","age":28,"gender":"M"},{"id":100304,"name":"Ballard, Dotty","age":3,"gender":"F"},{"id":100305,"name":"Kimball, Nathan","age":6,"gender":"M"},{"id":100306,"name":"Petersen, Brent","age":48,"gender":"M"},{"id":100307,"name":"Petersen, Patience","age":46,"gender":"F"},{"id":100308,"name":"Petersen, Donald","age":13,"gender":"M"},{"id":100309,"name":"Petersen, Annie","age":16,"gender":"F"},{"id":100310,"name":"Petersen, Jared","age":10,"gender":"M"},{"id":100311,"name":"Stapley, Philip","age":53,"gender":"M"},{"id":100312,"name":"Petersen, Gerrit","age":17,"gender":"M"},{"id":100313,"name":"Christofferson, Jared","age":75,"gender":"M"},{"id":100314,"name":"Merrill, Sheri","age":63,"gender":"F"},{"id":100315,"name":"Merrill, Ezra","age":66,"gender":"M"},{"id":100316,"name":"Rasband, Sidney","age":77,"gender":"M"},{"id":100317,"name":"Rasband, Eve","age":70,"gender":"F"},{"id":100318,"name":"Eyring, Luke","age":65,"gender":"M"},{"id":100319,"name":"Eyring, Eve","age":60,"gender":"F"},{"id":100320,"name":"Eyring, Benjamin","age":24,"gender":"M"},{"id":100321,"name":"Eyring, Carole","age":15,"gender":"F"},{"id":100322,"name":"Woodruff, Sheri","age":71,"gender":"F"},{"id":100323,"name":"Woodruff, Harold","age":75,"gender":"M"},{"id":100324,"name":"Snow, Bathsheba","age":65,"gender":"F"},{"id":100325,"name":"Cook, Carole","age":76,"gender":"F"},{"id":100326,"name":"Marsh, Eli","age":58,"gender":"M"},{"id":100327,"name":"Ivins, Jane","age":47,"gender":"F"},{"id":100328,"name":"Davies, Nettie","age":66,"gender":"F"},{"id":100329,"name":"Davies, Andrew","age":69,"gender":"M"},{"id":100330,"name":"Uchtdorf, Emma","age":39,"gender":"F"},{"id":100331,"name":"Poelman, Enoch","age":45,"gender":"M"}];
 
-        const demoOutOfUnit = {"LIVING_INSIDE":[{"id":80001,"mrn":"0000003946967","unitNumber":509205,"unitName":"Meridian Idaho East Stake","position":"Stake Presidency Second Counselor","organization":"Stake Presidency","name":"Smith, George Albert","activeDate":"2025-09-14T06:00:00.000+00:00","setApartDate":"2025-09-14T06:00:00.000+00:00","age":46},{"id":80002,"mrn":"0000032965028","unitNumber":509205,"unitName":"Meridian Idaho East Stake","position":"Stake Building Specialist","organization":"Facilities","name":"Smith, Joseph F.","activeDate":"2020-01-05T07:00:00.000+00:00","setApartDate":null,"age":52},{"id":80003,"mrn":"000002202137A","unitNumber":509205,"unitName":"Meridian Idaho East Stake","position":"Stake High Councilor","organization":"High Council","name":"Smith, Hyrum","activeDate":"2024-03-10T06:00:00.000+00:00","setApartDate":"2024-03-10T06:00:00.000+00:00","age":50}]};
-
-        // Convert LCR format to internal format
-        this.callingsData = this.convertLCRData(demoCallings);
-        
-        // Process out-of-unit callings
-        if (demoOutOfUnit && demoOutOfUnit.LIVING_INSIDE) {
-            const outOfUnitOrg = {
-                id: 'out-of-unit',
-                name: 'Out of Unit Callings',
-                callings: []
-            };
-            
-            demoOutOfUnit.LIVING_INSIDE.forEach((calling, index) => {
-                const convertedCalling = {
-                    id: calling.id || `out-of-unit-${index}`,
-                    name: calling.position || 'Unknown Position',
-                    member: {
-                        id: calling.id,
-                        name: calling.name
-                    },
-                    activeDate: calling.activeDate ? calling.activeDate.split('T')[0] : null,
-                    setApartDate: calling.setApartDate ? calling.setApartDate.split('T')[0] : null
-                };
-                outOfUnitOrg.callings.push(convertedCalling);
-            });
-            
-            if (outOfUnitOrg.callings.length > 0) {
-                this.callingsData.subOrgs.push(outOfUnitOrg);
-            }
-        }
+        // Callings data is already in internal format (includes out-of-unit as a subOrg)
+        this.callingsData = demoCallings;
         
         // Import member list
         this.importMemberList(demoMembers);
@@ -1437,9 +1454,82 @@ class CallingManager {
             localStorage.setItem('callingManagerHidden', JSON.stringify(Array.from(this.hiddenCallings)));
             localStorage.setItem('callingManagerHiddenMembers', JSON.stringify(Array.from(this.hiddenMembers)));
             localStorage.setItem('callingManagerValidationRules', JSON.stringify(this.orgValidationRules));
+            localStorage.setItem('callingManagerHiddenColumns', JSON.stringify(Array.from(this.hiddenColumns)));
+
+            // Persist full session state for resume capability
+            this.saveSessionState();
         } catch (e) {
             console.error('Error saving data:', e);
         }
+    }
+
+    saveSessionState() {
+        try {
+            // Save current scenario state into scenarios array first
+            if (this.currentScenarioId !== null) {
+                const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
+                if (currentScenario) {
+                    currentScenario.data = JSON.parse(JSON.stringify(this.callingsData));
+                    currentScenario.changeHistory = [...this.changeHistory];
+                    currentScenario.changedCallings = new Set(this.changedCallings);
+                }
+            }
+
+            if (this.originalData && this.scenarios.length > 0) {
+                const sessionState = {
+                    originalData: this.originalData,
+                    scenarios: this.scenarios.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        data: s.data,
+                        changeHistory: s.changeHistory,
+                        changedCallings: Array.from(s.changedCallings)
+                    })),
+                    currentScenarioId: this.currentScenarioId,
+                    nextScenarioId: this.nextScenarioId
+                };
+                localStorage.setItem('callingManagerSession', JSON.stringify(sessionState));
+            }
+        } catch (e) {
+            console.error('Error saving session state:', e);
+        }
+    }
+
+    restoreSessionState() {
+        const stored = localStorage.getItem('callingManagerSession');
+        if (!stored) return false;
+
+        try {
+            const session = JSON.parse(stored);
+            if (!session.originalData || !session.scenarios || session.scenarios.length === 0) return false;
+
+            this.originalData = session.originalData;
+            this.nextScenarioId = session.nextScenarioId || 1;
+            this.scenarios = session.scenarios.map(s => ({
+                id: s.id,
+                name: s.name,
+                data: s.data,
+                changeHistory: s.changeHistory || [],
+                changedCallings: new Set(s.changedCallings || [])
+            }));
+
+            // Restore active scenario
+            const targetId = session.currentScenarioId || this.scenarios[0].id;
+            const target = this.scenarios.find(s => s.id === targetId) || this.scenarios[0];
+            this.currentScenarioId = target.id;
+            this.callingsData = JSON.parse(JSON.stringify(target.data));
+            this.changeHistory = [...target.changeHistory];
+            this.changedCallings = new Set(target.changedCallings);
+
+            return true;
+        } catch (e) {
+            console.error('Error restoring session state:', e);
+            return false;
+        }
+    }
+
+    clearSessionState() {
+        localStorage.removeItem('callingManagerSession');
     }
 
     importMemberList(rawMembers) {
@@ -1481,6 +1571,16 @@ class CallingManager {
     }
 
     showHome() {
+        // Confirm if there are unsaved changes
+        if (this.changeHistory && this.changeHistory.length > 0) {
+            const confirmed = confirm(
+                `You have ${this.changeHistory.length} unsaved change${this.changeHistory.length === 1 ? '' : 's'}. ` +
+                'Going back will keep your session saved so you can resume later.\n\n' +
+                'Are you sure you want to go back?'
+            );
+            if (!confirmed) return;
+        }
+
         document.getElementById('home-section').classList.add('active');
         document.getElementById('manager-section').classList.remove('active');
         document.getElementById('search-input').value = '';
@@ -1508,6 +1608,10 @@ class CallingManager {
             }
             // Pass true to preserve current changeHistory and changedCallings (for imports)
             this.createScenario('Scenario 1', true);
+        } else {
+            // Resuming a session — render existing tabs and update button state
+            this.renderScenarioTabs();
+            this.updateUndoButton();
         }
         
         // Auto-hide members under 18 without callings on initial load
@@ -1955,12 +2059,17 @@ class CallingManager {
             table.className = 'callings-table';
 
             const thead = document.createElement('thead');
+            const hideSustained = this.hiddenColumns.has('sustained');
+            const hideSetApart = this.hiddenColumns.has('setApart');
+            const hideTimeInCalling = this.hiddenColumns.has('timeInCalling');
             thead.innerHTML = `
                 <tr>
                     <th>Calling</th>
                     <th>Name</th>
-                    <th>Sustained</th>
-                    <th>Set Apart</th>
+                    <th class="sustained-header"${hideSustained ? ' style="display:none"' : ''}>Sustained</th>
+                    <th class="set-apart-header"${hideSetApart ? ' style="display:none"' : ''}>Set Apart</th>
+                    <th class="time-in-calling-header"${hideTimeInCalling ? ' style="display:none"' : ''}>Time in Calling</th>
+                    <th class="considering-header">Considering</th>
                     <th></th>
                 </tr>
             `;
@@ -2091,10 +2200,25 @@ class CallingManager {
             link.textContent = calling.member.name;
             link.onclick = () => this.changeMember(org.id, calling.id, callingIndex);
             nameCell.appendChild(link);
+
+            // Show calling count if member has more than one calling
+            const memberCallings = this.findMemberCallings(calling.member.id);
+            if (memberCallings.length > 1) {
+                const countLink = document.createElement('span');
+                countLink.className = 'calling-count-badge';
+                countLink.textContent = `(${memberCallings.length})`;
+                countLink.title = `${calling.member.name} has ${memberCallings.length} callings`;
+                countLink.onclick = (e) => {
+                    e.stopPropagation();
+                    this.showMemberCallingsInfo(calling.member, memberCallings);
+                };
+                nameCell.appendChild(countLink);
+            }
         } else {
             const vacant = document.createElement('span');
-            vacant.className = 'vacant-text';
+            vacant.className = 'vacant-link';
             vacant.textContent = 'Calling Vacant';
+            vacant.onclick = () => this.changeMember(org.id, calling.id, callingIndex);
             nameCell.appendChild(vacant);
         }
         row.appendChild(nameCell);
@@ -2102,6 +2226,7 @@ class CallingManager {
         // Sustained date
         const sustainedCell = document.createElement('td');
         sustainedCell.className = 'sustained-cell';
+        if (this.hiddenColumns.has('sustained')) sustainedCell.style.display = 'none';
         if (calling.activeDate) {
             const activeDate = new Date(calling.activeDate);
             sustainedCell.textContent = activeDate.toLocaleDateString('en-GB', {
@@ -2115,10 +2240,26 @@ class CallingManager {
         // Set Apart
         const setApartCell = document.createElement('td');
         setApartCell.className = 'set-apart-cell';
+        if (this.hiddenColumns.has('setApart')) setApartCell.style.display = 'none';
         if (calling.setApartDate) {
             setApartCell.innerHTML = '<span class="set-apart-check">✓</span>';
         }
         row.appendChild(setApartCell);
+
+        // Time in Calling
+        const timeCell = document.createElement('td');
+        timeCell.className = 'time-in-calling-cell';
+        if (this.hiddenColumns.has('timeInCalling')) timeCell.style.display = 'none';
+        if (calling.activeDate) {
+            timeCell.textContent = this.formatTimeInCalling(calling.activeDate);
+        }
+        row.appendChild(timeCell);
+
+        // Considering (candidates)
+        const consideringCell = document.createElement('td');
+        consideringCell.className = 'considering-cell';
+        this.renderConsideringCell(consideringCell, calling, org, callingIndex);
+        row.appendChild(consideringCell);
 
         // Actions (pencil edit icon)
         const actionsCell = document.createElement('td');
@@ -2153,7 +2294,12 @@ class CallingManager {
         editRow.className = 'editing-row';
 
         const editCell = document.createElement('td');
-        editCell.colSpan = 5;
+        // Count visible columns: calling, name, sustained?, setApart?, timeInCalling?, considering, actions = 4 base + optional
+        let colCount = 4; // calling + name + considering + actions
+        if (!this.hiddenColumns.has('sustained')) colCount++;
+        if (!this.hiddenColumns.has('setApart')) colCount++;
+        if (!this.hiddenColumns.has('timeInCalling')) colCount++;
+        editCell.colSpan = colCount;
 
         const controls = document.createElement('div');
         controls.className = 'inline-edit-controls';
@@ -2452,16 +2598,56 @@ class CallingManager {
         
         memberList.innerHTML = '';
         
-        // Filter out hidden members
-        const visibleMembers = this.memberList.filter(member => !this.hiddenMembers.has(member.id));
+        // Look up the org and calling for validation rules
+        let rules = null;
+        let org = null;
+        let callingName = null;
+        if (this.pendingAssignment) {
+            org = this.callingsData.subOrgs.find(o => o.id == this.pendingAssignment.orgId);
+            if (org && org.callings[this.pendingAssignment.callingIndex]) {
+                callingName = org.callings[this.pendingAssignment.callingIndex].name;
+                rules = this.getCallingRules(org, callingName);
+            }
+        }
+
+        // Build filter description badge
+        const filterBadge = document.getElementById('member-modal-filter-badge');
+        if (filterBadge) {
+            const parts = [];
+            if (rules) {
+                if (rules.gender) parts.push(rules.gender === 'M' ? 'Male' : 'Female');
+                if (rules.minAge && rules.maxAge) parts.push(`Ages ${rules.minAge}–${rules.maxAge}`);
+                else if (rules.minAge) parts.push(`Age ${rules.minAge}+`);
+                else if (rules.maxAge) parts.push(`Age ≤${rules.maxAge}`);
+            }
+            if (parts.length > 0) {
+                filterBadge.textContent = `Filtered: ${parts.join(', ')}`;
+                filterBadge.style.display = '';
+            } else {
+                filterBadge.textContent = '';
+                filterBadge.style.display = 'none';
+            }
+        }
+
+        // Filter out hidden members and apply validation rules
+        const visibleMembers = this.memberList.filter(member => {
+            if (this.hiddenMembers.has(member.id)) return false;
+            if (rules) {
+                if (rules.gender && member.gender && member.gender !== rules.gender) return false;
+                if (rules.minAge && member.age && member.age < rules.minAge) return false;
+                if (rules.maxAge && member.age && member.age > rules.maxAge) return false;
+            }
+            return true;
+        });
         
         if (visibleMembers.length === 0) {
-            memberList.innerHTML = '<p class="empty-state">No members available. Click "Add New Member" to add manually.</p>';
+            memberList.innerHTML = '<p class="empty-state">No members match the filter rules for this calling. Click "Add New Member" to add manually.</p>';
         } else {
             visibleMembers.forEach(member => {
                 const item = document.createElement('div');
                 item.className = 'member-item';
                 item.textContent = member.name;
+                if (member.age) item.textContent += ` (${member.age})`;
                 item.onclick = () => this.selectMember(member);
                 memberList.appendChild(item);
             });
@@ -2517,6 +2703,137 @@ class CallingManager {
             if (!confirmed) return;
         }
 
+        // Check if member already has callings
+        const existingCallings = this.findMemberCallings(member.id);
+        // Exclude the calling we're assigning to (in case of "Change")
+        const otherCallings = existingCallings.filter(ec => 
+            !(ec.orgId == orgId && ec.callingIndex === callingIndex)
+        );
+
+        if (otherCallings.length > 0) {
+            // Store member for later use and show existing callings modal
+            this.pendingMember = member;
+            this.showExistingCallingsModal(member, otherCallings, calling, org);
+        } else {
+            // No existing callings — proceed directly
+            this.performAssignment(member, []);
+        }
+    }
+
+    showMemberCallingsInfo(member, callings) {
+        const modal = document.getElementById('member-callings-info-modal');
+        const nameEl = document.getElementById('member-callings-info-name');
+        const listEl = document.getElementById('member-callings-info-list');
+
+        nameEl.textContent = `${member.name} holds ${callings.length} callings:`;
+
+        listEl.innerHTML = '';
+        callings.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'member-calling-info-item';
+            item.innerHTML = `<span class="calling-detail">${c.callingName}</span><span class="org-detail">${c.orgName}</span>`;
+            listEl.appendChild(item);
+        });
+
+        modal.classList.add('active');
+    }
+
+    closeMemberCallingsInfo() {
+        document.getElementById('member-callings-info-modal').classList.remove('active');
+    }
+
+    findMemberCallings(memberId) {
+        const results = [];
+        if (!this.callingsData || !this.callingsData.subOrgs) return results;
+
+        this.callingsData.subOrgs.forEach(org => {
+            org.callings.forEach((calling, idx) => {
+                if (calling.member && calling.member.id === memberId) {
+                    results.push({
+                        orgId: org.id,
+                        orgName: org.name,
+                        callingId: calling.id,
+                        callingIndex: idx,
+                        callingName: calling.name,
+                        memberName: calling.member.name
+                    });
+                }
+            });
+        });
+
+        return results;
+    }
+
+    showExistingCallingsModal(member, existingCallings, targetCalling, targetOrg) {
+        const modal = document.getElementById('existing-callings-modal');
+        const message = document.getElementById('existing-callings-message');
+        const list = document.getElementById('existing-callings-list');
+
+        const callingWord = existingCallings.length === 1 ? 'calling' : 'callings';
+        message.innerHTML = `<strong>${member.name}</strong> currently has <strong>${existingCallings.length}</strong> existing ${callingWord}. ` +
+            `Select any callings you would like to release them from as a result of being called to <strong>${targetCalling.name}</strong> in <strong>${targetOrg.name}</strong>.`;
+
+        list.innerHTML = '';
+        existingCallings.forEach((ec, i) => {
+            const item = document.createElement('div');
+            item.className = 'existing-calling-item';
+            item.innerHTML = `
+                <input type="checkbox" id="release-calling-${i}" data-org-id="${ec.orgId}" data-calling-index="${ec.callingIndex}" data-calling-id="${ec.callingId}">
+                <label for="release-calling-${i}">
+                    <span class="calling-detail">${ec.callingName}</span><br>
+                    <span class="org-detail">${ec.orgName}</span>
+                </label>
+            `;
+            // Let clicking the row toggle the checkbox
+            item.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'INPUT') {
+                    const cb = item.querySelector('input[type="checkbox"]');
+                    cb.checked = !cb.checked;
+                }
+            });
+            list.appendChild(item);
+        });
+
+        // Hide the member modal without clearing pendingAssignment
+        document.getElementById('member-modal').classList.remove('active');
+        modal.classList.add('active');
+    }
+
+    closeExistingCallingsModal() {
+        document.getElementById('existing-callings-modal').classList.remove('active');
+        this.pendingMember = null;
+        this.pendingAssignment = null;
+    }
+
+    submitExistingCallingsDecision() {
+        const member = this.pendingMember;
+        if (!member) return;
+
+        // Gather checked callings to release
+        const checkboxes = document.querySelectorAll('#existing-callings-list input[type="checkbox"]:checked');
+        const toRelease = [];
+        checkboxes.forEach(cb => {
+            toRelease.push({
+                orgId: cb.dataset.orgId,
+                callingIndex: parseInt(cb.dataset.callingIndex),
+                callingId: cb.dataset.callingId
+            });
+        });
+
+        document.getElementById('existing-callings-modal').classList.remove('active');
+        this.performAssignment(member, toRelease);
+    }
+
+    performAssignment(member, releasesFromExisting) {
+        if (!this.pendingAssignment) return;
+
+        const { orgId, callingId, callingIndex, isNew } = this.pendingAssignment;
+        const org = this.callingsData.subOrgs.find(o => o.id == orgId);
+        if (!org) return;
+
+        const calling = org.callings[callingIndex];
+        if (!calling || calling.id != callingId) return;
+
         // Create unique identifier for this calling including index
         const uniqueCallingId = `${org.id}-${calling.id}-${callingIndex}`;
 
@@ -2526,10 +2843,31 @@ class CallingManager {
         const callDescription = `Call ${member.name} to ${calling.name} in ${org.name}`;
 
         // Check if member previously had a calling
-        const memberHadCalling = this.callingsData.subOrgs.some(org => 
-            org.callings.some(c => c.member && c.member.id === member.id)
+        const memberHadCalling = this.callingsData.subOrgs.some(o => 
+            o.callings.some(c => c.member && c.member.id === member.id)
         );
 
+        // --- Perform releases from existing callings first ---
+        releasesFromExisting.forEach(rel => {
+            const relOrg = this.callingsData.subOrgs.find(o => o.id == rel.orgId);
+            if (!relOrg) return;
+            const relCalling = relOrg.callings[rel.callingIndex];
+            if (!relCalling || !relCalling.member) return;
+
+            const relMemberName = relCalling.member.name;
+            const relDescription = `Release ${relMemberName} from ${relCalling.name} in ${relOrg.name}`;
+
+            // Save state for undo (first release captures full state)
+            this.saveStateForUndo(relDescription, `${relOrg.id}-${relCalling.id}-${rel.callingIndex}`);
+
+            relCalling.member = null;
+            relCalling.activeDate = null;
+            relCalling.setApartDate = null;
+
+            this.markCallingAsChanged(`${relOrg.id}-${relCalling.id}-${rel.callingIndex}`);
+        });
+
+        // --- Now assign the new calling ---
         // Update the calling
         calling.member = {
             id: member.id,
@@ -2538,13 +2876,13 @@ class CallingManager {
         calling.activeDate = null; // Leave sustained date blank (pending)
         calling.setApartDate = null;
 
-        // Record the changes (release first if applicable, then call)
+        // Record the changes (release from target calling first if applicable, then call)
         if (releaseDescription) {
             this.recordChange(releaseDescription, uniqueCallingId);
         }
         this.recordChange(callDescription, uniqueCallingId);
 
-        // Mark this calling as changed for visual highlighting using unique identifier with index
+        // Mark this calling as changed for visual highlighting
         this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
 
         // If member didn't have a calling before, ensure they cannot be hidden
@@ -2552,10 +2890,17 @@ class CallingManager {
             this.hiddenMembers.delete(member.id);
         }
 
+        this.pendingMember = null;
         this.saveData();
         this.renderAllOrganizations();
-        this.updateVisibilityLists(); // Update visibility controls to reflect new state
+        this.updateVisibilityLists();
         this.closeMemberModal();
+
+        // Clear considering candidates on the target calling if the assignment succeeded
+        if (calling.considering && calling.considering.length > 0 && calling.member && calling.member.id === member.id) {
+            calling.considering = [];
+            this.saveData();
+        }
     }
 
     showAddNewMember() {
@@ -2600,6 +2945,12 @@ class CallingManager {
             content.classList.remove('active');
         });
         document.getElementById(`${tabName}-tab-content`).classList.add('active');
+
+        // Hide Show All / Hide All buttons on the Columns tab
+        const bulkActions = document.getElementById('visibility-bulk-actions');
+        if (bulkActions) {
+            bulkActions.style.display = tabName === 'columns' ? 'none' : '';
+        }
     }
 
     updateVisibilityLists() {
@@ -2672,6 +3023,35 @@ class CallingManager {
             item.appendChild(label);
             membersVisibilityList.appendChild(item);
         });
+
+        // Update columns list
+        const columnsVisibilityList = document.getElementById('columns-visibility-list');
+        if (columnsVisibilityList) {
+            columnsVisibilityList.innerHTML = '';
+            const toggleableColumns = [
+                { key: 'sustained', label: 'Sustained' },
+                { key: 'setApart', label: 'Set Apart' },
+                { key: 'timeInCalling', label: 'Time in Calling' },
+            ];
+            toggleableColumns.forEach(col => {
+                const item = document.createElement('div');
+                item.className = 'visibility-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `vis-col-${col.key}`;
+                checkbox.checked = !this.hiddenColumns.has(col.key);
+                checkbox.onchange = (e) => this.toggleColumn(col.key, e.target.checked);
+
+                const label = document.createElement('label');
+                label.htmlFor = `vis-col-${col.key}`;
+                label.innerHTML = `<span>${col.label}</span>`;
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                columnsVisibilityList.appendChild(item);
+            });
+        }
     }
 
     getAllMembersWithoutCallings() {
@@ -2726,6 +3106,45 @@ class CallingManager {
     closeVisibilityModal() {
         document.getElementById('visibility-panel').classList.remove('active');
         document.querySelector('main').classList.remove('panel-open');
+    }
+
+    formatTimeInCalling(dateStr) {
+        if (!dateStr) return '';
+        const start = new Date(dateStr);
+        const now = new Date();
+        if (isNaN(start.getTime())) return '';
+
+        let years = now.getFullYear() - start.getFullYear();
+        let months = now.getMonth() - start.getMonth();
+        let days = now.getDate() - start.getDate();
+
+        if (days < 0) {
+            months--;
+            // Days in previous month
+            const prev = new Date(now.getFullYear(), now.getMonth(), 0);
+            days += prev.getDate();
+        }
+        if (months < 0) {
+            years--;
+            months += 12;
+        }
+
+        const parts = [];
+        if (years > 0) parts.push(`${years}y`);
+        if (months > 0) parts.push(`${months}m`);
+        if (years === 0 && months === 0) parts.push(`${Math.max(days, 0)}d`);
+        else if (days > 0 && years === 0) parts.push(`${days}d`);
+        return parts.join(' ');
+    }
+
+    toggleColumn(colKey, show) {
+        if (show) {
+            this.hiddenColumns.delete(colKey);
+        } else {
+            this.hiddenColumns.add(colKey);
+        }
+        this.saveData();
+        this.renderAllOrganizations();
     }
 
     toggleCalling(callingId, show) {
@@ -2793,8 +3212,9 @@ class CallingManager {
             org.callings.forEach((calling, callingIndex) => {
                 const callingName = calling.name.toLowerCase();
                 const memberName = calling.member ? calling.member.name.toLowerCase() : '';
+                const consideringNames = (calling.considering || []).map(c => c.name.toLowerCase()).join(' ');
                 
-                if (callingName.includes(lowerQuery) || memberName.includes(lowerQuery)) {
+                if (callingName.includes(lowerQuery) || memberName.includes(lowerQuery) || consideringNames.includes(lowerQuery)) {
                     matchingCallings.push({ calling, callingIndex });
                 }
             });
@@ -2811,7 +3231,10 @@ class CallingManager {
                 const table = document.createElement('table');
                 table.className = 'callings-table';
                 const thead = document.createElement('thead');
-                thead.innerHTML = `<tr><th>Calling</th><th>Name</th><th>Sustained</th><th>Set Apart</th><th></th></tr>`;
+                const _hideSust = this.hiddenColumns.has('sustained');
+                const _hideSA = this.hiddenColumns.has('setApart');
+                const _hideTIC = this.hiddenColumns.has('timeInCalling');
+                thead.innerHTML = `<tr><th>Calling</th><th>Name</th><th class="sustained-header"${_hideSust ? ' style="display:none"' : ''}>Sustained</th><th class="set-apart-header"${_hideSA ? ' style="display:none"' : ''}>Set Apart</th><th class="time-in-calling-header"${_hideTIC ? ' style="display:none"' : ''}>Time in Calling</th><th class="considering-header">Considering</th><th></th></tr>`;
                 table.appendChild(thead);
                 const tbody = document.createElement('tbody');
                 
@@ -3032,12 +3455,17 @@ class CallingManager {
         const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
         const scenarioName = currentScenario ? currentScenario.name : 'Scenario';
 
-        // Separate releases from calls/assignments
+        // Separate releases from calls/assignments, and split out-of-unit releases
         const releases = [];
+        const outOfUnitReleases = [];
         const calls = [];
         this.changeHistory.forEach(change => {
             if (change.description.startsWith('Release ')) {
-                releases.push(change.description);
+                if (change.description.includes(' in Out of Unit Callings')) {
+                    outOfUnitReleases.push(change.description);
+                } else {
+                    releases.push(change.description);
+                }
             } else {
                 calls.push(change.description);
             }
@@ -3061,6 +3489,17 @@ class CallingManager {
             html += '</ol>';
         } else {
             html += '<p class="report-empty">No releases</p>';
+        }
+
+        // Out of Unit Releases sub-section
+        if (outOfUnitReleases.length > 0) {
+            html += `<h3 class="report-subheading">Out of Unit Releases (${outOfUnitReleases.length})</h3>`;
+            html += '<p class="report-note">These releases are under a different unit\'s authority.</p>';
+            html += '<ol class="report-list">';
+            outOfUnitReleases.forEach(desc => {
+                html += `<li>${desc}</li>`;
+            });
+            html += '</ol>';
         }
         html += '</div>';
 
@@ -3091,6 +3530,172 @@ class CallingManager {
 
     markCallingAsChanged(callingId) {
         this.changedCallings.add(callingId);
+    }
+
+    // ── Considering (Candidates) Management ──
+
+    renderConsideringCell(cell, calling, org, callingIndex) {
+        cell.innerHTML = '';
+        if (!calling.considering) calling.considering = [];
+
+        const pillsWrapper = document.createElement('div');
+        pillsWrapper.className = 'considering-pills';
+
+        calling.considering.forEach((candidate, candidateIdx) => {
+            const pill = document.createElement('span');
+            pill.className = 'candidate-pill';
+            pill.textContent = candidate.name;
+
+            // Apply button (✓)
+            const applyBtn = document.createElement('button');
+            applyBtn.className = 'pill-action pill-apply';
+            applyBtn.title = 'Assign this member';
+            applyBtn.textContent = '\u2713';
+            applyBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.applyCandidate(org, calling, callingIndex, candidateIdx);
+            };
+            pill.appendChild(applyBtn);
+
+            // Remove button (✕)
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'pill-action pill-remove';
+            removeBtn.title = 'Remove';
+            removeBtn.textContent = '\u2715';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.removeCandidate(org, calling, callingIndex, candidateIdx);
+            };
+            pill.appendChild(removeBtn);
+
+            pillsWrapper.appendChild(pill);
+        });
+
+        cell.appendChild(pillsWrapper);
+
+        // Inline type-ahead input
+        const inputWrapper = document.createElement('div');
+        inputWrapper.className = 'considering-input-wrapper';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'considering-input';
+        input.placeholder = '+ Add...';
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'considering-dropdown';
+
+        let selectedIdx = -1;
+
+        const showResults = (query) => {
+            dropdown.innerHTML = '';
+            selectedIdx = -1;
+            if (!query || query.length < 1) {
+                dropdown.classList.remove('open');
+                return;
+            }
+
+            const lq = query.toLowerCase();
+            const existingIds = new Set(calling.considering.map(c => c.id));
+
+            // Get validation rules for filtering
+            const rules = this.getCallingRules(org, calling.name);
+
+            const matches = this.memberList.filter(m => {
+                if (this.hiddenMembers.has(m.id)) return false;
+                if (existingIds.has(m.id)) return false;
+                if (calling.member && calling.member.id === m.id) return false;
+                if (!m.name.toLowerCase().includes(lq)) return false;
+
+                // Apply gender filter
+                if (rules.gender && m.gender && m.gender !== rules.gender) return false;
+                // Apply min age filter
+                if (rules.minAge && m.age && m.age < rules.minAge) return false;
+                // Apply max age filter
+                if (rules.maxAge && m.age && m.age > rules.maxAge) return false;
+
+                return true;
+            }).slice(0, 8);
+
+            if (matches.length === 0) {
+                dropdown.classList.remove('open');
+                return;
+            }
+
+            matches.forEach((m, idx) => {
+                const item = document.createElement('div');
+                item.className = 'considering-dropdown-item';
+                item.textContent = m.name;
+                if (m.age) item.textContent += ` (${m.age})`;
+                item.onmousedown = (e) => {
+                    e.preventDefault();
+                    this.addCandidate(org, calling, callingIndex, m, cell);
+                    input.value = '';
+                    dropdown.classList.remove('open');
+                };
+                dropdown.appendChild(item);
+            });
+
+            dropdown.classList.add('open');
+        };
+
+        input.addEventListener('input', () => showResults(input.value.trim()));
+
+        input.addEventListener('keydown', (e) => {
+            const items = dropdown.querySelectorAll('.considering-dropdown-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
+                items.forEach((it, i) => it.classList.toggle('highlighted', i === selectedIdx));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIdx = Math.max(selectedIdx - 1, 0);
+                items.forEach((it, i) => it.classList.toggle('highlighted', i === selectedIdx));
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedIdx >= 0 && items[selectedIdx]) {
+                    items[selectedIdx].onmousedown(e);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('open');
+                input.blur();
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => dropdown.classList.remove('open'), 150);
+        });
+
+        inputWrapper.appendChild(input);
+        inputWrapper.appendChild(dropdown);
+        cell.appendChild(inputWrapper);
+    }
+
+    addCandidate(org, calling, callingIndex, member, cell) {
+        if (!calling.considering) calling.considering = [];
+        if (calling.considering.some(c => c.id === member.id)) return;
+        calling.considering.push({ id: member.id, name: member.name });
+        this.saveData();
+        this.renderConsideringCell(cell, calling, org, callingIndex);
+    }
+
+    removeCandidate(org, calling, callingIndex, candidateIdx) {
+        calling.considering.splice(candidateIdx, 1);
+        this.saveData();
+        this.renderAllOrganizations();
+    }
+
+    applyCandidate(org, calling, callingIndex, candidateIdx) {
+        const candidate = calling.considering[candidateIdx];
+        if (!candidate) return;
+
+        // Find the full member object
+        const member = this.memberList.find(m => m.id === candidate.id) || { id: candidate.id, name: candidate.name };
+
+        // Use the pendingAssignment + selectMember flow for full validation
+        // The considering array will be cleared in performAssignment if the assignment succeeds
+        this.pendingAssignment = { orgId: org.id, callingId: calling.id, callingIndex, isNew: !calling.member };
+        this.selectMember(member);
     }
 
     // Scenario Management Methods

@@ -1058,11 +1058,31 @@ header .toolbar input[type="text"]:focus {
     text-decoration: none;
 }
 
-/* Vacant calling */
-.callings-table .vacant-text {
+/* Vacant calling - clickable link */
+.callings-table .vacant-link {
     color: var(--text-tertiary);
     font-style: italic;
     font-weight: 400;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.callings-table .vacant-link:hover {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+/* Calling count badge */
+.calling-count-badge {
+    color: var(--link-color);
+    cursor: pointer;
+    margin-left: 4px;
+    font-size: 0.8125rem;
+    text-decoration: underline;
+}
+
+.calling-count-badge:hover {
+    text-decoration: none;
 }
 
 /* Sustained date column */
@@ -1080,11 +1100,152 @@ header .toolbar input[type="text"]:focus {
     color: var(--text-primary);
 }
 
+/* Time in Calling */
+.callings-table td.time-in-calling-cell {
+    white-space: nowrap;
+}
+
 /* Edit/Action button in last column */
 .callings-table td.actions-cell {
     text-align: right;
     white-space: nowrap;
     width: 40px;
+}
+
+/* ============================================================
+   Considering (Candidates) Column
+   ============================================================ */
+
+.callings-table td.considering-cell {
+    min-width: 160px;
+    max-width: 280px;
+    vertical-align: middle;
+}
+
+.considering-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.candidate-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--unity-gray5, #e5e5e5);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 2px 4px 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.pill-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.7rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+}
+
+.pill-apply {
+    color: var(--success-color, #2e7d32);
+}
+
+.pill-apply:hover {
+    background: var(--success-color, #2e7d32);
+    color: white;
+}
+
+.pill-remove {
+    color: var(--text-tertiary);
+}
+
+.pill-remove:hover {
+    background: #d32f2f;
+    color: white;
+}
+
+.considering-input-wrapper {
+    position: relative;
+}
+
+.considering-input {
+    width: 100%;
+    min-width: 80px;
+    padding: 3px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    background: transparent;
+    outline: none;
+}
+
+.considering-input::placeholder {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.considering-input:focus {
+    border-color: var(--accent-blue);
+    background: white;
+    box-shadow: 0 0 0 2px rgba(21, 116, 147, 0.12);
+}
+
+.considering-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    min-width: 200px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 100;
+}
+
+.considering-dropdown.open {
+    display: block;
+}
+
+.considering-dropdown-item {
+    padding: 6px 10px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.considering-dropdown-item:hover,
+.considering-dropdown-item.highlighted {
+    background: var(--unity-gray2, #f5f5f5);
+    color: var(--accent-blue);
+}
+
+/* Print: hide considering column and type-ahead */
+@media print {
+    .considering-cell,
+    .considering-header,
+    .time-in-calling-cell,
+    .time-in-calling-header {
+        display: none;
+    }
 }
 
 .callings-table .edit-row-btn {
@@ -1136,6 +1297,7 @@ header .toolbar input[type="text"]:focus {
 .inline-edit-controls {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--spacing-8);
 }
 
@@ -1720,6 +1882,127 @@ footer {
     display: none;
 }
 
+.member-filter-badge {
+    display: inline-block;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-bottom: var(--spacing-8);
+    border: 1px solid var(--primary-color);
+}
+
+/* ============================================================
+   Existing Callings Release Modal
+   ============================================================ */
+/* Resume Session Modal */
+.resume-session-text {
+    margin: 0 0 var(--spacing-12) 0;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.resume-session-details {
+    padding: var(--spacing-12) var(--spacing-16);
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-16);
+}
+
+.resume-detail-row {
+    padding: 4px 0;
+    font-size: 0.9rem;
+}
+
+.resume-detail-label {
+    font-weight: 600;
+}
+
+/* Member Callings Info Modal */
+.member-callings-info-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-8);
+    margin-bottom: var(--spacing-16);
+}
+
+.member-calling-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--spacing-8) var(--spacing-12);
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.member-calling-info-item .calling-detail {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.member-calling-info-item .org-detail {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+.existing-callings-message {
+    margin: 0 0 var(--spacing-16) 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.existing-callings-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-8);
+    margin-bottom: var(--spacing-16);
+}
+
+.existing-calling-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-8);
+    padding: var(--spacing-8) var(--spacing-12);
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.existing-calling-item:hover {
+    border-color: var(--primary-color);
+    background: var(--unity-gray2, #f5f5f5);
+}
+
+.existing-calling-item input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-color);
+}
+
+.existing-calling-item label {
+    flex: 1;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.existing-calling-item .calling-detail {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.existing-calling-item .org-detail {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
 /* ============================================================
    Print Changes Modal
    ============================================================ */
@@ -1809,6 +2092,19 @@ footer {
     padding: var(--spacing-16) 0;
 }
 
+.report-subheading {
+    margin-top: var(--spacing-24);
+    padding-top: var(--spacing-12);
+    border-top: 1px solid var(--border-color);
+}
+
+.report-note {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin: 4px 0 var(--spacing-8) 0;
+}
+
 @media (max-width: 600px) {
     .report-columns {
         grid-template-columns: 1fr;
@@ -1880,8 +2176,20 @@ footer {
     .toolbar,
     .modal-actions,
     .close,
+    .close-btn,
     main,
     .side-panel {
+        display: none !important;
+    }
+
+    #print-changes-modal .modal-header {
+        display: block !important;
+        border-bottom: 2px solid #0d6e6e;
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+    }
+
+    #print-changes-modal .modal-header .close-btn {
         display: none !important;
     }
 
@@ -1905,7 +2213,7 @@ footer {
         padding: 0;
     }
 
-    #print-changes-content h2 {
+    #print-changes-modal .modal-header h2 {
         page-break-after: avoid;
     }
 
