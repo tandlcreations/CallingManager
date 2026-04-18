@@ -1,8 +1,7 @@
 # Temporary data files (user's ward data - keep private)
-temp.json
-temp-memberlist.json
-temp-outofunitcallings.json
 temp*.json
+*.json
+!package.json
 
 # System files
 .DS_Store
@@ -11,18 +10,13 @@ Thumbs.db
 # Editor files
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 *~
 
 # Logs
 *.log
-npm-debug.log*
 
-# Local storage data
-localStorage/
-calling-data-scenario-1-2026-01-25 (4).json
-LCR.png
-*CallingManager.code-workspace*
-CallingManager.code-workspace
-inspiration/
+# Images
+*.png
