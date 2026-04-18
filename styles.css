@@ -1548,12 +1548,54 @@ header .toolbar input[type="text"]:focus {
    Footer (LCR style)
    ============================================================ */
 footer {
-    background: var(--unity-gray60);
-    color: rgba(255,255,255,0.7);
+    background: var(--unity-gray3);
+    border-top: 1px solid var(--border-color);
     text-align: center;
-    padding: var(--spacing-16);
+    padding: var(--spacing-16) var(--spacing-32);
     margin-top: auto;
     font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.footer-content {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.footer-links {
+    margin-bottom: var(--spacing-8);
+}
+
+.footer-links a {
+    color: var(--link-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.footer-links a:hover {
+    text-decoration: underline;
+}
+
+.footer-links a:visited {
+    color: var(--link-color);
+}
+
+.footer-sep {
+    margin: 0 var(--spacing-8);
+    color: var(--text-tertiary);
+}
+
+.footer-copy {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.footer-copy a {
+    color: var(--link-color);
+}
+
+.footer-copy a:visited {
+    color: var(--link-color);
 }
 
 /* ============================================================

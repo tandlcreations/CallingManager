@@ -151,12 +151,21 @@ class CallingManager {
         // Build and set the bookmarklet href
         this.initBookmarklet();
 
-        // Privacy link
-        const privacyLink = document.getElementById('privacy-link');
-        if (privacyLink) {
-            privacyLink.addEventListener('click', (e) => {
+        // Privacy link (footer)
+        const footerPrivacy = document.getElementById('footer-privacy-link');
+        if (footerPrivacy) {
+            footerPrivacy.addEventListener('click', (e) => {
                 e.preventDefault();
                 document.getElementById('privacy-modal').classList.add('active');
+            });
+        }
+
+        // About link (footer)
+        const footerAbout = document.getElementById('footer-about-link');
+        if (footerAbout) {
+            footerAbout.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.getElementById('about-modal').classList.add('active');
             });
         }
     }

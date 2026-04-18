@@ -161,10 +161,7 @@
                     </div>
                 </div>
 
-                <div class="disclaimer">
-                    <h4><a href="#" id="privacy-link">Wait... is this okay to do?</a></h4>
-                    <p>Not an official website of <a href="https://churchofjesuschrist.org/" target="_blank">The Church of Jesus Christ of Latter-day Saints</a>.</p>
-                </div>
+
             </section>
 
             <section id="manager-section" class="section">
@@ -304,7 +301,14 @@
         </main>
 
         <footer>
-            <p>© 2026 Ward Calling Manager - Unofficial tool for church organization management</p>
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#" id="footer-about-link">About</a>
+                    <span class="footer-sep">·</span>
+                    <a href="#" id="footer-privacy-link">Is this okay?</a>
+                </div>
+                <p class="footer-copy">© 2026 Ward Calling Manager · Not an official website of <a href="https://churchofjesuschrist.org/" target="_blank">The Church of Jesus Christ of Latter-day Saints</a></p>
+            </div>
         </footer>
     </div>
 
@@ -339,6 +343,33 @@
             <div class="modal-footer no-print">
                 <button class="primary-btn" onclick="window.print()">Print</button>
                 <button class="secondary-btn" onclick="window.callingManager.closePrintChanges()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="modal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <h2>About Ward Calling Manager</h2>
+                <button class="close-btn" onclick="document.getElementById('about-modal').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: left;">
+                <h3 style="margin-top: 0;">Why does this tool exist?</h3>
+                <p>Anyone who has served in a bishopric or stake presidency knows the challenge: you need to plan, discuss, and track calling changes across multiple organizations&mdash;sometimes dozens at a time. Unfortunately, the tools available have significant limitations:</p>
+
+                <ul style="margin: 16px 0 16px 20px; line-height: 1.8;">
+                    <li><strong>LCR has no scenario planning.</strong> Leader and Clerk Resources lets you make calling changes one at a time, but there is no way to draft or compare what-if scenarios before committing them.</li>
+                    <li><strong>Church data can&rsquo;t be stored externally.</strong> Church policy prohibits sending membership data to third-party servers, cloud services, or online tools&mdash;ruling out most collaborative software.</li>
+                    <li><strong>Spreadsheets fall short.</strong> Tracking callings in a spreadsheet or word processor is tedious, error-prone, and hard to keep in sync with the real data in LCR.</li>
+                </ul>
+
+                <p>Ward Calling Manager solves these problems by running <strong>entirely in your web browser</strong>. It imports your ward data directly from LCR, lets you create and compare multiple scenarios, and never sends a single byte of data to any server. When you&rsquo;re done, you print your changes and carry them into your next meeting.</p>
+
+                <h3 style="margin-top: 24px;">Acknowledgments</h3>
+                <p>This project was inspired by <a href="https://callingmanager.com" target="_blank">callingmanager.com</a>, which pioneered the idea of an offline calling planning tool. Ward Calling Manager builds on that concept with an updated interface, direct LCR data import, scenario comparison, and a commitment to local-only data handling.</p>
+
+                <p style="margin-top: 20px; font-size: 0.85em; color: var(--text-secondary);">Ward Calling Manager is an independent, open-source project and is not affiliated with, endorsed by, or connected to The Church of Jesus Christ of Latter-day Saints or callingmanager.com.</p>
             </div>
         </div>
     </div>
