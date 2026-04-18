@@ -1348,6 +1348,66 @@ header .toolbar input[type="text"]:focus {
     font-weight: 400;
 }
 
+/* ── Add Custom Calling ── */
+.add-calling-link {
+    display: inline-block;
+    font-size: 0.8125rem;
+    color: var(--link);
+    text-decoration: none;
+    padding: var(--spacing-4) var(--spacing-16);
+    cursor: pointer;
+}
+.add-calling-link:hover {
+    text-decoration: underline;
+}
+.add-calling-form {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-8);
+    padding: var(--spacing-8) var(--spacing-16);
+}
+.add-calling-input {
+    flex: 1;
+    max-width: 320px;
+    padding: var(--spacing-4) var(--spacing-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-family: inherit;
+}
+.add-calling-input:focus {
+    outline: none;
+    border-color: var(--link);
+    box-shadow: 0 0 0 2px rgba(0, 108, 181, 0.15);
+}
+.add-calling-btn {
+    padding: var(--spacing-4) var(--spacing-12);
+    background: var(--link);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+.add-calling-btn:hover {
+    background: var(--link-hover);
+}
+.add-calling-cancel-btn {
+    padding: var(--spacing-4) var(--spacing-12);
+    background: none;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+.add-calling-cancel-btn:hover {
+    background: var(--hover-bg, rgba(0,0,0,0.04));
+}
+.calling-name-cell.custom-calling {
+    font-style: italic;
+}
+
 /* ============================================================
    Members Without Callings (card grid)
    ============================================================ */
@@ -2001,6 +2061,64 @@ footer {
 .existing-calling-item .org-detail {
     color: var(--text-secondary);
     font-size: 0.8125rem;
+}
+
+/* ============================================================
+   Cascade Release Modal & Warning Banner
+   ============================================================ */
+.cascade-release-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-8);
+    margin: var(--spacing-16) 0;
+}
+
+.cascade-release-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-8) var(--spacing-12);
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.cascade-release-item .calling-detail {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.cascade-release-item .cascade-member-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.release-all-btn {
+    background: var(--release-red, #c4314b) !important;
+    border-color: var(--release-red, #c4314b) !important;
+}
+
+.release-all-btn:hover {
+    background: #a82940 !important;
+    border-color: #a82940 !important;
+}
+
+.cascade-warning-banner {
+    padding: var(--spacing-8) var(--spacing-12);
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: var(--border-radius);
+    color: #856404;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    margin-bottom: var(--spacing-8);
+}
+
+.cascade-warning-banner svg {
+    vertical-align: -2px;
+    margin-right: 4px;
+    stroke: #856404;
 }
 
 /* ============================================================

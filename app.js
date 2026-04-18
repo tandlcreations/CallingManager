@@ -23,6 +23,22 @@ class CallingManager {
         this.hiddenOrgGroups = new Set(); // Top-level org groups that are hidden in the filter
         this.orgValidationRules = {}; // Custom age/gender rules per org, keyed by org id
         this.hiddenColumns = new Set(); // Columns hidden by user (sustained, setApart, timeInCalling)
+        this.pendingCascadeRelease = null; // Pending cascade release data for presidency releases
+
+        // When a president/bishop is released, their counselors must also be released
+        this.PRESIDENCY_CASCADE_MAP = {
+            'Bishop': ['Bishopric First Counselor', 'Bishopric Second Counselor'],
+            'Elders Quorum President': ['Elders Quorum First Counselor', 'Elders Quorum Second Counselor'],
+            'Relief Society President': ['Relief Society First Counselor', 'Relief Society Second Counselor'],
+            'Priests Quorum President': ['Priests Quorum First Assistant', 'Priests Quorum Second Assistant'],
+            'Teachers Quorum President': ['Teachers Quorum First Counselor', 'Teachers Quorum Second Counselor'],
+            'Deacons Quorum President': ['Deacons Quorum First Counselor', 'Deacons Quorum Second Counselor'],
+            'Young Women President': ['Young Women First Counselor', 'Young Women Second Counselor'],
+            'Young Women Class President': ['Young Women Class First Counselor', 'Young Women Class Second Counselor'],
+            'Sunday School President': ['Sunday School First Counselor', 'Sunday School Second Counselor'],
+            'Primary President': ['Primary First Counselor', 'Primary Second Counselor'],
+        };
+
         this.init();
     }
 
@@ -2103,6 +2119,19 @@ class CallingManager {
             callingsPane.appendChild(countDiv);
         }
 
+        // "+ Add Calling" link (not for out-of-unit or full-time missionaries)
+        if (org.id !== 'out-of-unit' && org.id !== -5) {
+            const addLink = document.createElement('a');
+            addLink.className = 'add-calling-link';
+            addLink.href = '#';
+            addLink.textContent = '+ Add Calling';
+            addLink.onclick = (e) => {
+                e.preventDefault();
+                this.showAddCallingForm(org, callingsPane, addLink);
+            };
+            callingsPane.appendChild(addLink);
+        }
+
         section.appendChild(callingsPane);
 
         // ── Members pane (class members) ──
@@ -2189,6 +2218,9 @@ class CallingManager {
         // Calling name
         const callingCell = document.createElement('td');
         callingCell.className = 'calling-name-cell';
+        if (calling.isCustom) {
+            callingCell.classList.add('custom-calling');
+        }
         callingCell.textContent = calling.name;
         row.appendChild(callingCell);
 
@@ -2334,6 +2366,18 @@ class CallingManager {
                 this.assignMember(org.id, calling.id, callingIndex);
             };
             controls.appendChild(assignBtn);
+        }
+
+        // Remove button (only for custom callings)
+        if (calling.isCustom) {
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'edit-action-btn release-btn';
+            removeBtn.textContent = 'Remove Calling';
+            removeBtn.onclick = () => {
+                editRow.remove();
+                this.removeCustomCalling(org, callingIndex, calling);
+            };
+            controls.appendChild(removeBtn);
         }
 
         // Cancel button
@@ -2532,6 +2576,34 @@ class CallingManager {
         return card;
     }
 
+    // ── Presidency Cascade Release Helpers ──
+
+    getPresidencyCounselorNames(callingName) {
+        return this.PRESIDENCY_CASCADE_MAP[callingName] || null;
+    }
+
+    findOccupiedCounselorsInOrg(counselorNames, org) {
+        const results = [];
+        org.callings.forEach((calling, idx) => {
+            if (counselorNames.includes(calling.name) && calling.member) {
+                results.push({ calling, callingIndex: idx });
+            }
+        });
+        return results;
+    }
+
+    restoreReleasedMemberVisibility(memberName) {
+        if (!memberName) return;
+        const member = this.memberList.find(m =>
+            m.name.trim().toLowerCase() === memberName.trim().toLowerCase()
+        );
+        if (member && this.hiddenMembers.has(member.id)) {
+            if (!member.age || member.age >= 18) {
+                this.hiddenMembers.delete(member.id);
+            }
+        }
+    }
+
     releaseMember(callingId, orgId, callingIndex) {
         const org = this.callingsData.subOrgs.find(o => o.id == orgId);
         if (!org) return;
@@ -2539,47 +2611,217 @@ class CallingManager {
         const calling = org.callings[callingIndex];
         if (!calling || calling.id != callingId || !calling.member) return;
 
-        // Get member info before clearing
         const releasedMemberName = calling.member.name;
 
+        // Check for presidency cascade
+        const counselorNames = this.getPresidencyCounselorNames(calling.name);
+        if (counselorNames) {
+            const occupiedCounselors = this.findOccupiedCounselorsInOrg(counselorNames, org);
+            if (occupiedCounselors.length > 0) {
+                this.showCascadeReleaseModal(calling, org, callingIndex, occupiedCounselors);
+                return;
+            }
+        }
+
+        // No cascade needed — regular confirm
         if (!confirm(`Are you sure you want to release ${releasedMemberName} from ${calling.name}?`)) {
             return;
         }
 
-        // Create unique identifier for this calling
-        const uniqueCallingId = `${org.id}-${calling.id}`;
+        this.executeRelease(calling, org, callingIndex);
+    }
 
-        // Save state before making change
-        this.saveStateForUndo(`Release ${releasedMemberName} from ${calling.name} in ${org.name}`, uniqueCallingId);
+    executeRelease(calling, org, callingIndex) {
+        const releasedMemberName = calling.member.name;
+        const uniqueCallingId = `${org.id}-${calling.id}`;
+        const releaseDesc = `Release ${releasedMemberName} from ${calling.name} in ${org.name}`;
+
+        this.saveStateForUndo(releaseDesc, uniqueCallingId);
 
         calling.member = null;
         calling.activeDate = null;
         calling.setApartDate = null;
 
-        // Mark this calling as changed for visual highlighting using unique identifier with index
+        this.recordChange(releaseDesc, uniqueCallingId);
         this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
-
-        // If this member was in our member list, make sure they're not hidden
-        if (releasedMemberName) {
-            const member = this.memberList.find(m => 
-                m.name.trim().toLowerCase() === releasedMemberName.trim().toLowerCase()
-            );
-            if (member && this.hiddenMembers.has(member.id)) {
-                // Only remove from hidden if they're an adult (keep youth hidden by default)
-                if (!member.age || member.age >= 18) {
-                    this.hiddenMembers.delete(member.id);
-                }
-            }
-        }
+        this.restoreReleasedMemberVisibility(releasedMemberName);
 
         this.saveData();
         this.renderAllOrganizations();
-        
-        // Update visibility lists if panel is open
+
         const panel = document.getElementById('visibility-panel');
         if (panel && panel.classList.contains('active')) {
             this.updateVisibilityLists();
         }
+    }
+
+    showCascadeReleaseModal(calling, org, callingIndex, occupiedCounselors) {
+        this.pendingCascadeRelease = { calling, org, callingIndex, occupiedCounselors };
+
+        const modal = document.getElementById('cascade-release-modal');
+        const message = document.getElementById('cascade-release-message');
+        const list = document.getElementById('cascade-release-list');
+
+        message.innerHTML = `Releasing <strong>${calling.member.name}</strong> as <strong>${calling.name}</strong> ` +
+            `will also release the following counselors in <strong>${org.name}</strong>:`;
+
+        list.innerHTML = '';
+        occupiedCounselors.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'cascade-release-item';
+            item.innerHTML = `<span class="calling-detail">${c.calling.name}</span><span class="cascade-member-name">${c.calling.member.name}</span>`;
+            list.appendChild(item);
+        });
+
+        modal.classList.add('active');
+    }
+
+    confirmCascadeRelease() {
+        if (!this.pendingCascadeRelease) return;
+        const { calling, org, callingIndex, occupiedCounselors } = this.pendingCascadeRelease;
+
+        this.closeCascadeReleaseModal();
+        this.executeCascadeRelease(calling, org, callingIndex, occupiedCounselors);
+    }
+
+    closeCascadeReleaseModal() {
+        document.getElementById('cascade-release-modal').classList.remove('active');
+        this.pendingCascadeRelease = null;
+    }
+
+    executeCascadeRelease(calling, org, callingIndex, occupiedCounselors) {
+        const releasedMemberName = calling.member.name;
+        const uniqueCallingId = `${org.id}-${calling.id}`;
+        const releaseDesc = `Release ${releasedMemberName} from ${calling.name} in ${org.name}`;
+
+        // Collect counselor info before clearing
+        const counselorInfo = occupiedCounselors.map(c => ({
+            memberName: c.calling.member.name,
+            callingName: c.calling.name,
+            callingId: c.calling.id,
+            callingIndex: c.callingIndex
+        }));
+
+        // Save a single snapshot before all mutations
+        this.saveStateForUndo(releaseDesc, uniqueCallingId);
+
+        // Release the president/bishop
+        calling.member = null;
+        calling.activeDate = null;
+        calling.setApartDate = null;
+        this.recordChange(releaseDesc, uniqueCallingId);
+        this.markCallingAsChanged(`${org.id}-${calling.id}-${callingIndex}`);
+        this.restoreReleasedMemberVisibility(releasedMemberName);
+
+        // Release counselors
+        counselorInfo.forEach(ci => {
+            const counselorDesc = `Release ${ci.memberName} from ${ci.callingName} in ${org.name}`;
+            const c = org.callings[ci.callingIndex];
+            c.member = null;
+            c.activeDate = null;
+            c.setApartDate = null;
+            this.recordChange(counselorDesc, `${org.id}-${ci.callingId}-${ci.callingIndex}`);
+            this.markCallingAsChanged(`${org.id}-${ci.callingId}-${ci.callingIndex}`);
+            this.restoreReleasedMemberVisibility(ci.memberName);
+        });
+
+        this.saveData();
+        this.renderAllOrganizations();
+
+        const panel = document.getElementById('visibility-panel');
+        if (panel && panel.classList.contains('active')) {
+            this.updateVisibilityLists();
+        }
+    }
+
+    showAddCallingForm(org, callingsPane, addLink) {
+        // If form already open, close it
+        const existing = callingsPane.querySelector('.add-calling-form');
+        if (existing) {
+            existing.remove();
+            return;
+        }
+
+        const form = document.createElement('div');
+        form.className = 'add-calling-form';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'add-calling-input';
+        input.placeholder = 'Enter calling name…';
+        input.maxLength = 80;
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-calling-btn';
+        addBtn.textContent = 'Add';
+        addBtn.onclick = () => {
+            const name = input.value.trim();
+            if (name) {
+                this.addCustomCalling(org, name);
+                form.remove();
+            }
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'add-calling-cancel-btn';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = () => form.remove();
+
+        // Enter key submits
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addBtn.click();
+            if (e.key === 'Escape') cancelBtn.click();
+        });
+
+        form.appendChild(input);
+        form.appendChild(addBtn);
+        form.appendChild(cancelBtn);
+
+        // Insert after the add link
+        addLink.after(form);
+        input.focus();
+    }
+
+    addCustomCalling(org, callingName) {
+        const customId = `custom-${org.id}-${Date.now()}`;
+        const newCalling = {
+            id: customId,
+            name: callingName,
+            member: null,
+            activeDate: null,
+            setApartDate: null,
+            isCustom: true
+        };
+
+        const desc = `Add custom calling "${callingName}" in ${org.name}`;
+
+        // Save state BEFORE mutation
+        this.saveStateForUndo(desc, customId);
+
+        org.callings.push(newCalling);
+
+        // Record for print report
+        this.recordChange(desc, customId);
+
+        this.saveData();
+        this.renderAllOrganizations();
+    }
+
+    removeCustomCalling(org, callingIndex, calling) {
+        const memberName = calling.member ? calling.member.name : null;
+        const desc = memberName
+            ? `Remove custom calling "${calling.name}" (${memberName}) from ${org.name}`
+            : `Remove custom calling "${calling.name}" from ${org.name}`;
+
+        this.saveStateForUndo(desc, calling.id);
+
+        org.callings.splice(callingIndex, 1);
+
+        // Record for print report
+        this.recordChange(desc, calling.id);
+
+        this.saveData();
+        this.renderAllOrganizations();
     }
 
     assignMember(orgId, callingId, callingIndex) {
@@ -2626,6 +2868,37 @@ class CallingManager {
             } else {
                 filterBadge.textContent = '';
                 filterBadge.style.display = 'none';
+            }
+        }
+
+        // Show cascade warning banner if changing a president/bishop
+        let cascadeWarning = document.getElementById('member-modal-cascade-warning');
+        if (!cascadeWarning) {
+            // Create if not in DOM yet
+            cascadeWarning = document.createElement('div');
+            cascadeWarning.id = 'member-modal-cascade-warning';
+            cascadeWarning.className = 'cascade-warning-banner';
+            const searchInput = document.getElementById('member-search');
+            searchInput.parentNode.insertBefore(cascadeWarning, searchInput);
+        }
+        cascadeWarning.style.display = 'none';
+        cascadeWarning.innerHTML = '';
+
+        if (this.pendingAssignment && !this.pendingAssignment.isNew && org) {
+            const calling = org.callings[this.pendingAssignment.callingIndex];
+            if (calling && calling.member) {
+                const counselorNames = this.getPresidencyCounselorNames(calling.name);
+                if (counselorNames) {
+                    const occupiedCounselors = this.findOccupiedCounselorsInOrg(counselorNames, org);
+                    if (occupiedCounselors.length > 0) {
+                        const counselorList = occupiedCounselors.map(c =>
+                            `<strong>${c.calling.member.name}</strong> (${c.calling.name})`
+                        ).join(', ');
+                        cascadeWarning.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ` +
+                            `Changing the <strong>${calling.name}</strong> will also release: ${counselorList}`;
+                        cascadeWarning.style.display = '';
+                    }
+                }
             }
         }
 
@@ -2703,6 +2976,15 @@ class CallingManager {
             if (!confirmed) return;
         }
 
+        // Detect presidency cascade for changes (not new assignments)
+        let cascadeCounselors = [];
+        if (!isNew && calling.member) {
+            const counselorNames = this.getPresidencyCounselorNames(calling.name);
+            if (counselorNames) {
+                cascadeCounselors = this.findOccupiedCounselorsInOrg(counselorNames, org);
+            }
+        }
+
         // Check if member already has callings
         const existingCallings = this.findMemberCallings(member.id);
         // Exclude the calling we're assigning to (in case of "Change")
@@ -2713,9 +2995,19 @@ class CallingManager {
         if (otherCallings.length > 0) {
             // Store member for later use and show existing callings modal
             this.pendingMember = member;
-            this.showExistingCallingsModal(member, otherCallings, calling, org);
+            this.showExistingCallingsModal(member, otherCallings, calling, org, cascadeCounselors);
+        } else if (cascadeCounselors.length > 0) {
+            // No existing callings but there IS a cascade — confirm before proceeding
+            const counselorList = cascadeCounselors.map(c =>
+                `  • ${c.calling.member.name} (${c.calling.name})`
+            ).join('\n');
+            const proceed = confirm(
+                `Changing the ${calling.name} will also release the following counselors:\n\n${counselorList}\n\nProceed?`
+            );
+            if (!proceed) return;
+            this.performAssignment(member, [], cascadeCounselors);
         } else {
-            // No existing callings — proceed directly
+            // No existing callings, no cascade — proceed directly
             this.performAssignment(member, []);
         }
     }
@@ -2764,14 +3056,29 @@ class CallingManager {
         return results;
     }
 
-    showExistingCallingsModal(member, existingCallings, targetCalling, targetOrg) {
+    showExistingCallingsModal(member, existingCallings, targetCalling, targetOrg, cascadeCounselors = []) {
         const modal = document.getElementById('existing-callings-modal');
         const message = document.getElementById('existing-callings-message');
         const list = document.getElementById('existing-callings-list');
 
         const callingWord = existingCallings.length === 1 ? 'calling' : 'callings';
-        message.innerHTML = `<strong>${member.name}</strong> currently has <strong>${existingCallings.length}</strong> existing ${callingWord}. ` +
+        let messageHtml = `<strong>${member.name}</strong> currently has <strong>${existingCallings.length}</strong> existing ${callingWord}. ` +
             `Select any callings you would like to release them from as a result of being called to <strong>${targetCalling.name}</strong> in <strong>${targetOrg.name}</strong>.`;
+
+        // Add cascade warning if changing a president/bishop
+        if (cascadeCounselors.length > 0) {
+            const counselorList = cascadeCounselors.map(c =>
+                `<strong>${c.calling.member.name}</strong> (${c.calling.name})`
+            ).join(', ');
+            messageHtml += `<div class="cascade-warning-banner" style="margin-top: 12px;">` +
+                `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ` +
+                `This change will also release: ${counselorList}</div>`;
+        }
+
+        message.innerHTML = messageHtml;
+
+        // Store cascade counselors for use in submitExistingCallingsDecision
+        this.pendingCascadeCounselors = cascadeCounselors;
 
         list.innerHTML = '';
         existingCallings.forEach((ec, i) => {
@@ -2803,6 +3110,7 @@ class CallingManager {
         document.getElementById('existing-callings-modal').classList.remove('active');
         this.pendingMember = null;
         this.pendingAssignment = null;
+        this.pendingCascadeCounselors = [];
     }
 
     submitExistingCallingsDecision() {
@@ -2820,11 +3128,14 @@ class CallingManager {
             });
         });
 
+        const cascadeCounselors = this.pendingCascadeCounselors || [];
+
         document.getElementById('existing-callings-modal').classList.remove('active');
-        this.performAssignment(member, toRelease);
+        this.pendingCascadeCounselors = [];
+        this.performAssignment(member, toRelease, cascadeCounselors);
     }
 
-    performAssignment(member, releasesFromExisting) {
+    performAssignment(member, releasesFromExisting, cascadeCounselors = []) {
         if (!this.pendingAssignment) return;
 
         const { orgId, callingId, callingIndex, isNew } = this.pendingAssignment;
@@ -2842,10 +3153,21 @@ class CallingManager {
         const releaseDescription = previousMember ? `Release ${previousMember} from ${calling.name} in ${org.name}` : null;
         const callDescription = `Call ${member.name} to ${calling.name} in ${org.name}`;
 
+        // Collect cascade counselor info before any mutations
+        const cascadeInfo = cascadeCounselors.map(c => ({
+            memberName: c.calling.member.name,
+            callingName: c.calling.name,
+            callingId: c.calling.id,
+            callingIndex: c.callingIndex
+        }));
+
         // Check if member previously had a calling
         const memberHadCalling = this.callingsData.subOrgs.some(o => 
             o.callings.some(c => c.member && c.member.id === member.id)
         );
+
+        // --- Save a single state snapshot BEFORE any mutations ---
+        this.saveStateForUndo(callDescription, uniqueCallingId);
 
         // --- Perform releases from existing callings first ---
         releasesFromExisting.forEach(rel => {
@@ -2857,14 +3179,25 @@ class CallingManager {
             const relMemberName = relCalling.member.name;
             const relDescription = `Release ${relMemberName} from ${relCalling.name} in ${relOrg.name}`;
 
-            // Save state for undo (first release captures full state)
-            this.saveStateForUndo(relDescription, `${relOrg.id}-${relCalling.id}-${rel.callingIndex}`);
-
             relCalling.member = null;
             relCalling.activeDate = null;
             relCalling.setApartDate = null;
 
             this.markCallingAsChanged(`${relOrg.id}-${relCalling.id}-${rel.callingIndex}`);
+            this.recordChange(relDescription, `${relOrg.id}-${relCalling.id}-${rel.callingIndex}`);
+        });
+
+        // --- Release cascade counselors (presidency change) ---
+        cascadeInfo.forEach(ci => {
+            const c = org.callings[ci.callingIndex];
+            if (!c || !c.member) return;
+            const counselorDesc = `Release ${ci.memberName} from ${ci.callingName} in ${org.name}`;
+            c.member = null;
+            c.activeDate = null;
+            c.setApartDate = null;
+            this.recordChange(counselorDesc, `${org.id}-${ci.callingId}-${ci.callingIndex}`);
+            this.markCallingAsChanged(`${org.id}-${ci.callingId}-${ci.callingIndex}`);
+            this.restoreReleasedMemberVisibility(ci.memberName);
         });
 
         // --- Now assign the new calling ---
@@ -2876,7 +3209,7 @@ class CallingManager {
         calling.activeDate = null; // Leave sustained date blank (pending)
         calling.setApartDate = null;
 
-        // Record the changes (release from target calling first if applicable, then call)
+        // Record the individual descriptions for the print report
         if (releaseDescription) {
             this.recordChange(releaseDescription, uniqueCallingId);
         }
@@ -3381,7 +3714,8 @@ class CallingManager {
         const state = {
             data: JSON.stringify(this.callingsData),
             description: description,
-            callingId: callingId, // Store the calling ID that was changed
+            callingId: callingId,
+            isSnapshot: true,
             timestamp: new Date().toISOString()
         };
         
@@ -3401,13 +3735,32 @@ class CallingManager {
             return;
         }
 
-        const previousState = this.changeHistory.pop();
-        this.callingsData = JSON.parse(previousState.data);
-        
-        // Remove only the specific calling that was changed from the styled set
-        if (previousState.callingId) {
-            this.changedCallings.delete(previousState.callingId);
+        // Pop entries until we find one with a data snapshot.
+        // Description-only entries (from recordChange) are grouped with
+        // the preceding snapshot entry — they represent parts of one action.
+        const descriptions = [];
+        let snapshotEntry = null;
+
+        while (this.changeHistory.length > 0) {
+            const entry = this.changeHistory.pop();
+            if (entry.callingId) {
+                this.changedCallings.delete(entry.callingId);
+            }
+            if (entry.data) {
+                snapshotEntry = entry;
+                break;
+            }
+            descriptions.unshift(entry.description);
         }
+
+        if (!snapshotEntry) {
+            // No snapshot found — nothing to restore
+            this.updateUndoButton();
+            alert('Could not undo — no saved state found.');
+            return;
+        }
+
+        this.callingsData = JSON.parse(snapshotEntry.data);
         
         this.updateUndoButton();
         this.saveData();
@@ -3415,7 +3768,11 @@ class CallingManager {
         this.updateVisibilityLists();
         
         // Show what was undone
-        alert(`Undone: ${previousState.description}`);
+        const displayDescs = descriptions.length > 0 ? descriptions : [snapshotEntry.description];
+        const summary = displayDescs.length <= 2
+            ? displayDescs.join(' & ')
+            : `${displayDescs.length} changes`;
+        alert(`Undone: ${summary}`);
     }
 
     updateUndoButton() {
@@ -3423,8 +3780,16 @@ class CallingManager {
         if (undoBtn) {
             undoBtn.disabled = this.changeHistory.length === 0;
             if (this.changeHistory.length > 0) {
-                const lastChange = this.changeHistory[this.changeHistory.length - 1];
-                undoBtn.title = `Undo: ${lastChange.description}`;
+                // Show the last visible (non-snapshot) description, or fall back to any last entry
+                let desc = '';
+                for (let i = this.changeHistory.length - 1; i >= 0; i--) {
+                    if (!this.changeHistory[i].isSnapshot) {
+                        desc = this.changeHistory[i].description;
+                        break;
+                    }
+                }
+                if (!desc) desc = this.changeHistory[this.changeHistory.length - 1].description;
+                undoBtn.title = `Undo: ${desc}`;
             } else {
                 undoBtn.title = 'No changes to undo';
             }
@@ -3433,9 +3798,10 @@ class CallingManager {
         // Update print changes button
         const printChangesBtn = document.getElementById('print-changes-btn');
         if (printChangesBtn) {
-            printChangesBtn.disabled = this.changeHistory.length === 0;
-            if (this.changeHistory.length > 0) {
-                printChangesBtn.title = `Print ${this.changeHistory.length} change${this.changeHistory.length === 1 ? '' : 's'}`;
+            const visibleCount = this.changeHistory.filter(c => !c.isSnapshot).length;
+            printChangesBtn.disabled = visibleCount === 0;
+            if (visibleCount > 0) {
+                printChangesBtn.title = `Print ${visibleCount} change${visibleCount === 1 ? '' : 's'}`;
             } else {
                 printChangesBtn.title = 'No changes to print';
             }
@@ -3455,14 +3821,26 @@ class CallingManager {
         const currentScenario = this.scenarios.find(s => s.id === this.currentScenarioId);
         const scenarioName = currentScenario ? currentScenario.name : 'Scenario';
 
-        // Separate releases from calls/assignments, and split out-of-unit releases
+        // Positions that require stake authority for release (even though they are unit callings)
+        const stakeReleasePositions = [
+            'Bishop', 'Bishopric First Counselor', 'Bishopric Second Counselor',
+            'Elders Quorum President', 'Elders Quorum First Counselor', 'Elders Quorum Second Counselor'
+        ];
+
+        // Separate releases from calls/assignments, and split out-of-unit / stake-authority releases
+        // Skip snapshot entries (isSnapshot) — those are undo checkpoints, not visible changes
         const releases = [];
-        const outOfUnitReleases = [];
+        const stakeReleases = [];
         const calls = [];
         this.changeHistory.forEach(change => {
+            if (change.isSnapshot) return; // skip undo checkpoints
             if (change.description.startsWith('Release ')) {
                 if (change.description.includes(' in Out of Unit Callings')) {
-                    outOfUnitReleases.push(change.description);
+                    stakeReleases.push(change.description);
+                } else if (stakeReleasePositions.some(pos =>
+                    change.description.includes(` from ${pos} in `)
+                )) {
+                    stakeReleases.push(change.description);
                 } else {
                     releases.push(change.description);
                 }
@@ -3475,7 +3853,8 @@ class CallingManager {
         let html = '<div class="changes-report">';
         html += `<p class="report-scenario">Scenario: ${scenarioName}</p>`;
         html += `<p class="report-date">Generated: ${new Date().toLocaleString()}</p>`;
-        html += `<p class="report-summary">Total Changes: ${this.changeHistory.length}</p>`;
+        const totalVisible = releases.length + stakeReleases.length + calls.length;
+        html += `<p class="report-summary">Total Changes: ${totalVisible}</p>`;
         html += '<div class="report-columns">';
 
         // Releases column
@@ -3491,12 +3870,12 @@ class CallingManager {
             html += '<p class="report-empty">No releases</p>';
         }
 
-        // Out of Unit Releases sub-section
-        if (outOfUnitReleases.length > 0) {
-            html += `<h3 class="report-subheading">Out of Unit Releases (${outOfUnitReleases.length})</h3>`;
-            html += '<p class="report-note">These releases are under a different unit\'s authority.</p>';
+        // Stake-Authority Releases sub-section
+        if (stakeReleases.length > 0) {
+            html += `<h3 class="report-subheading">Stake-Authority Releases (${stakeReleases.length})</h3>`;
+            html += '<p class="report-note">These releases require stake presidency action.</p>';
             html += '<ol class="report-list">';
-            outOfUnitReleases.forEach(desc => {
+            stakeReleases.forEach(desc => {
                 html += `<li>${desc}</li>`;
             });
             html += '</ol>';

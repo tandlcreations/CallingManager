@@ -342,6 +342,25 @@
             </div>
         </div>
     </div>
+
+    <!-- Cascade Release Confirmation Modal -->
+    <div id="cascade-release-modal" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="modal-header">
+                <h2>Presidency Release</h2>
+                <button class="close-btn" onclick="window.callingManager.closeCascadeReleaseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="cascade-release-message" class="existing-callings-message"></p>
+                <div id="cascade-release-list" class="cascade-release-list"></div>
+                <div class="modal-actions">
+                    <button onclick="window.callingManager.closeCascadeReleaseModal()" class="secondary-btn">Cancel</button>
+                    <button onclick="window.callingManager.confirmCascadeRelease()" class="primary-btn release-all-btn">Release All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
