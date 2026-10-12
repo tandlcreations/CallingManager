@@ -289,125 +289,436 @@ class CallingManager {
         // Step 2 — Members With Callings report (/mlt/report/member-callings):
         //   Reads membersWithCallings, membersWithoutCallings, BaseUnitOrgs.
         //   Combines with stored org data → copies merged bundle to clipboard.
-        const code = `
-(function(){
-  var s=document.createElement('div');
-  s.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;padding:12px 20px;font:14px/1.4 sans-serif;text-align:center;';
-  s.style.background='#3a3d40';s.style.color='#fff';
-  s.textContent='Extracting LCR data...';
-  document.body.appendChild(s);
-  function fail(msg){s.style.background='#b00504';s.textContent='Error: '+msg;setTimeout(function(){s.remove()},12000);}
-  function ok(msg){s.style.background='#318d43';s.innerHTML=msg;setTimeout(function(){s.remove()},10000);}
-  function info(msg){s.style.background='#1a6985';s.textContent=msg;}
-  try{
-    var chunks=self.__next_f;
-    if(!chunks||!chunks.length){fail('No Next.js data found. Make sure you are on an LCR page.');return;}
+                const code = `
+            (async function(){
+    var s=document.createElement('div');
+    s.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;padding:12px 20px;font:14px/1.4 sans-serif;text-align:center;';
+    s.style.background='#3a3d40';s.style.color='#fff';
+    s.textContent='Extracting LCR data...';
+    document.body.appendChild(s);
+    function fail(msg){s.style.background='#b00504';s.textContent='Error: '+msg;setTimeout(function(){s.remove()},12000);}
+    function ok(msg){s.style.background='#318d43';s.innerHTML=msg;setTimeout(function(){s.remove()},10000);}
+    function warn(msg){s.style.background='#c47f00';s.innerHTML=msg;setTimeout(function(){s.remove()},12000);}
+    function info(msg){s.style.background='#1a6985';s.textContent=msg;}
     function findKey(o,key){
-      if(!o||typeof o!=='object') return null;
-      if(!Array.isArray(o)&&o[key]) return o[key];
-      if(Array.isArray(o)){for(var i=0;i<o.length;i++){var r=findKey(o[i],key);if(r)return r;}}
-      else{for(var k in o){var r=findKey(o[k],key);if(r)return r;}}
-      return null;
-    }
-    function parseRSC(keyword){
-      for(var i=0;i<chunks.length;i++){
-        var c=chunks[i];
-        if(typeof c[1]==='string'&&c[1].indexOf(keyword)!==-1){
-          var raw=c[1];var ci=raw.indexOf(':');
-          if(ci!==-1&&ci<10){try{return JSON.parse(raw.substring(ci+1));}catch(e){}}
-        }
-      }
-      return null;
-    }
-    var isOrgPage=location.pathname.indexOf('/orgs')!==-1;
-    var isMWCPage=location.pathname.indexOf('/report/member-callings')!==-1;
-    if(!isOrgPage&&!isMWCPage){
-      var hasOrgs=false,hasMWC=false;
-      for(var i=0;i<chunks.length;i++){
-        if(typeof chunks[i][1]==='string'){
-          if(chunks[i][1].indexOf('unitOrgsMap')!==-1) hasOrgs=true;
-          if(chunks[i][1].indexOf('membersWithCallings')!==-1) hasMWC=true;
-        }
-      }
-      if(hasOrgs) isOrgPage=true;
-      else if(hasMWC) isMWCPage=true;
-      else{fail('Not recognized as an LCR Organizations or Members With Callings page.');return;}
-    }
-    if(isOrgPage){
-      info('Step 1/2: Reading organization structure...');
-      var rsc=parseRSC('unitOrgsMap');
-      var uom=findKey(rsc,'unitOrgsMap');
-      if(!uom){fail('Could not find unitOrgsMap in page data.');return;}
-      var unitNums=Object.keys(uom);
-      if(!unitNums.length){fail('No unit data found.');return;}
-      var ud=uom[unitNums[0]];
-      var orgPayload={unitOrgs:ud.unitOrgs,unitName:ud.unitName,unitNumber:ud.unitNumber};
-      localStorage.setItem('__cm_orgData',JSON.stringify(orgPayload));
-      var orgCount=ud.unitOrgs?ud.unitOrgs.length:0;
-      ok('Step 1/2 done! '+orgCount+' organizations saved. Now open the <a href=\"https://lcr.churchofjesuschrist.org/mlt/report/member-callings?lang=eng\" style=\"color:#fff;font-weight:700;text-decoration:underline\">Members With Callings report</a> and click this bookmarklet again.');
-    } else {
-      info('Step 2/2: Reading member & callings data...');
-      function findMWC(o){
         if(!o||typeof o!=='object') return null;
-        if(o.listOfPersons) return o;
-        if(Array.isArray(o)){for(var i=0;i<o.length;i++){var r=findMWC(o[i]);if(r)return r;}}
-        else{for(var k in o){var r=findMWC(o[k]);if(r)return r;}}
+        if(!Array.isArray(o)&&o[key]) return o[key];
+        if(Array.isArray(o)){for(var i=0;i<o.length;i++){var r=findKey(o[i],key);if(r)return r;}}
+        else{for(var k in o){var r=findKey(o[k],key);if(r)return r;}}
         return null;
-      }
-      function tryParseMWC(){
-        var rsc2=parseRSC('membersWithCallings');
-        return findMWC(rsc2);
-      }
-      var mwcData=tryParseMWC();
-      if(!mwcData||!mwcData.listOfPersons){
-        info('Step 2/2: Waiting for page data to load...');
-        var attempts=0;var maxAttempts=10;
-        var poll=setInterval(function(){
-          attempts++;
-          mwcData=tryParseMWC();
-          if(mwcData&&mwcData.listOfPersons){
-            clearInterval(poll);
-            finishStep2(mwcData);
-          } else if(attempts>=maxAttempts){
-            clearInterval(poll);
-            fail('Could not find callings data after waiting. Try refreshing the page (F5) and clicking the bookmarklet again.');
-          }
-        },500);
-        return;
-      }
-      finishStep2(mwcData);
     }
-    function finishStep2(mwcData){
-      var lop=mwcData.listOfPersons;
-      var wc=lop.membersWithCallings||{};
-      var woc=lop.membersWithoutCallings||{};
-      var baseOrgs=(mwcData.BaseUnitOrgs&&mwcData.BaseUnitOrgs.UnitOrgs)||[];
-      var unitNum=(mwcData.BaseUnitOrgs&&mwcData.BaseUnitOrgs.unitNumber)||mwcData.unitNumber||null;
-      var storedOrg=localStorage.getItem('__cm_orgData');
-      var orgData=null;
-      if(storedOrg){try{orgData=JSON.parse(storedOrg);}catch(e){}}
-      var bundle={mwcData:{listOfPersons:lop,baseUnitOrgs:baseOrgs,unitNumber:unitNum}};
-      if(orgData){
-        bundle.orgData=orgData;
-        bundle.source='bookmarklet-combined';
-        localStorage.removeItem('__cm_orgData');
-      } else {
-        bundle.source='bookmarklet-mwc-only';
-      }
-      var json=JSON.stringify(bundle);
-      var wcCount=Object.keys(wc).length;
-      var wocCount=Object.keys(woc).length;
-      navigator.clipboard.writeText(json).then(function(){
-        var msg='Done! '+wcCount+' callings + '+wocCount+' members copied ('+Math.round(json.length/1024)+'KB).';
-        if(!orgData) msg+=' NOTE: No org structure found — run Step 1 on the Organizations page first for best results.';
-        msg+=' Switch to Calling Manager and click "Paste from Clipboard".';
-        ok(msg);
-      }).catch(function(e){fail(e.message||'Clipboard write failed');});
+    function findByPredicate(o,pred){
+        if(!o||typeof o!=='object') return null;
+        try{if(pred(o)) return o;}catch(e){}
+        if(Array.isArray(o)){for(var i=0;i<o.length;i++){var r=findByPredicate(o[i],pred);if(r)return r;}}
+        else{for(var k in o){var r=findByPredicate(o[k],pred);if(r)return r;}}
+        return null;
     }
-  }catch(e){fail(e.message||'Unknown error');}
+    function getChunksFromRuntime(){
+        var c=self.__next_f;
+        return Array.isArray(c)?c:[];
+    }
+    function getLikelyDataUrls(mode){
+        if(!self.performance||!performance.getEntriesByType) return [];
+        var origin=location.origin;
+        var keywords=mode==='org'
+            ? ['org','organization','unitorg','calling']
+            : ['member-callings','members','callings','report'];
+        var entries=performance.getEntriesByType('resource')||[];
+        var preferred=[];
+        var fallback=[];
+        for(var i=0;i<entries.length;i++){
+            var e=entries[i];
+            var name=e&&e.name?String(e.name):'';
+            if(!name||name.indexOf(origin)!==0) continue;
+            if(e.initiatorType&&e.initiatorType!=='fetch'&&e.initiatorType!=='xmlhttprequest') continue;
+            var pathNoQuery=name.split('?')[0].toLowerCase();
+            if(
+                pathNoQuery.endsWith('.css') ||
+                pathNoQuery.endsWith('.js') ||
+                pathNoQuery.endsWith('.png') ||
+                pathNoQuery.endsWith('.jpg') ||
+                pathNoQuery.endsWith('.jpeg') ||
+                pathNoQuery.endsWith('.gif') ||
+                pathNoQuery.endsWith('.svg') ||
+                pathNoQuery.endsWith('.woff') ||
+                pathNoQuery.endsWith('.woff2')
+            ) continue;
+            var lower=name.toLowerCase();
+            var hit=false;
+            for(var j=0;j<keywords.length;j++){
+                if(lower.indexOf(keywords[j])!==-1){hit=true;break;}
+            }
+            if(hit) preferred.push(name);
+            else fallback.push(name);
+        }
+        preferred.reverse();
+        fallback.reverse();
+        var urls=preferred.concat(fallback);
+        var seen={};
+        var unique=[];
+        for(var k=0;k<urls.length;k++){
+            if(seen[urls[k]]) continue;
+            seen[urls[k]]=true;
+            unique.push(urls[k]);
+        }
+        return unique.slice(0,30);
+    }
+    function extractPayloadsFromText(text){
+        if(!text) return [];
+        var payloads=[];
+        var t=text.trim();
+        if(t && (t[0]==='{'||t[0]==='[')){
+            try{
+                var parsed=JSON.parse(t);
+                if(parsed&&typeof parsed==='object') payloads.push(parsed);
+            }catch(e){}
+        }
+        var chunks=[];
+        var needle='self.__next_f.push(';
+        var pos=0;
+        while(true){
+            var start=text.indexOf(needle,pos);
+            if(start===-1) break;
+            var i=start+needle.length;
+            var depth=1;
+            var inStr=false;
+            var quote='';
+            var esc=false;
+            for(;i<text.length;i++){
+                var ch=text[i];
+                if(inStr){
+                    if(esc){esc=false;continue;}
+                    if(ch==='\\\\'){esc=true;continue;}
+                    if(ch===quote){inStr=false;quote='';}
+                    continue;
+                }
+                if(ch==='"'||ch==="'"||ch==='\`'){inStr=true;quote=ch;continue;}
+                if(ch==='('){depth++;continue;}
+                if(ch===')'){
+                    depth--;
+                    if(depth===0){
+                        var arg=text.slice(start+needle.length,i).trim();
+                        try{chunks.push(JSON.parse(arg));}catch(e){}
+                        pos=i+1;
+                        break;
+                    }
+                }
+            }
+            if(depth!==0) pos=start+needle.length;
+        }
+        if(chunks.length){
+            var p=extractPayloads(chunks);
+            for(var j=0;j<p.length;j++) payloads.push(p[j]);
+        }
+        return payloads;
+    }
+    async function fetchJsonCandidates(mode){
+        var urls=getLikelyDataUrls(mode);
+        for(var i=0;i<urls.length;i++){
+            try{
+                var res=await fetch(urls[i],{credentials:'include'});
+                if(!res.ok) continue;
+                var text=await res.text();
+                if(!text) continue;
+                var payloads=extractPayloadsFromText(text);
+                if(!payloads.length) continue;
+                if(mode==='org'){
+                    var org=findOrgPayload(payloads);
+                    if(org) return org;
+                }else{
+                    var mwc=findMWCPayload(payloads);
+                    if(mwc) return mwc;
+                }
+            }catch(e){}
+        }
+        return null;
+    }
+    function getChunksFromScripts(){
+        var out=[];
+        function extractPushArgs(text){
+            var args=[];
+            var needle='self.__next_f.push(';
+            var pos=0;
+            while(true){
+                var start=text.indexOf(needle,pos);
+                if(start===-1) break;
+                var i=start+needle.length;
+                var depth=1;
+                var inStr=false;
+                var quote='';
+                var esc=false;
+                for(;i<text.length;i++){
+                    var ch=text[i];
+                    if(inStr){
+                        if(esc){esc=false;continue;}
+                        if(ch==='\\\\'){esc=true;continue;}
+                        if(ch===quote){inStr=false;quote='';}
+                        continue;
+                    }
+                      if(ch==='\"'||ch==="'"||ch==='\`'){inStr=true;quote=ch;continue;}
+                    if(ch==='('){depth++;continue;}
+                    if(ch===')'){
+                        depth--;
+                        if(depth===0){
+                            args.push(text.slice(start+needle.length,i).trim());
+                            pos=i+1;
+                            break;
+                        }
+                    }
+                }
+                if(depth!==0){
+                    pos=start+needle.length;
+                }
+            }
+            return args;
+        }
+        var scripts=document.querySelectorAll('script');
+        for(var i=0;i<scripts.length;i++){
+            var txt=scripts[i].textContent||'';
+            var args=extractPushArgs(txt);
+            for(var j=0;j<args.length;j++){
+                try{out.push(JSON.parse(args[j]));}catch(e){}
+            }
+        }
+        if(!out.length){
+            var html=(document.documentElement&&document.documentElement.outerHTML)||'';
+            var htmlArgs=extractPushArgs(html);
+            for(var k=0;k<htmlArgs.length;k++){
+                try{out.push(JSON.parse(htmlArgs[k]));}catch(e){}
+            }
+        }
+        return out;
+    }
+    function extractPayloads(chunks){
+        var payloads=[];
+        function pushPayload(v){if(v&&typeof v==='object') payloads.push(v);}
+        for(var i=0;i<chunks.length;i++){
+            var c=chunks[i];
+            if(!c||typeof c[1]!=='string') continue;
+            var raw=c[1];
+            var t=raw.trim();
+            if((t[0]==='{'||t[0]==='[')){
+                try{pushPayload(JSON.parse(t));}catch(e){}
+            }
+            var lines=raw.split('\\n');
+            for(var j=0;j<lines.length;j++){
+                var line=lines[j].trim();
+                var ci=line.indexOf(':');
+                if(ci<=0||ci>12) continue;
+                var body=line.substring(ci+1).trim();
+                if(!body) continue;
+                var fc=body[0];
+                if(fc!=='{'&&fc!=='['&&fc!=='\"') continue;
+                try{pushPayload(JSON.parse(body));}catch(e){}
+            }
+        }
+        return payloads;
+    }
+    function hasTextInChunks(chunks,text){
+        for(var i=0;i<chunks.length;i++){
+            if(typeof chunks[i][1]==='string'&&chunks[i][1].indexOf(text)!==-1) return true;
+        }
+        return false;
+    }
+    function findOrgPayload(payloads){
+        for(var i=0;i<payloads.length;i++){
+            var uom=findKey(payloads[i],'unitOrgsMap');
+            if(uom&&typeof uom==='object'){
+                var nums=Object.keys(uom);
+                if(nums.length&&uom[nums[0]]&&Array.isArray(uom[nums[0]].unitOrgs)){
+                    return {unitOrgs:uom[nums[0]].unitOrgs,unitName:uom[nums[0]].unitName,unitNumber:uom[nums[0]].unitNumber};
+                }
+            }
+        }
+        for(var j=0;j<payloads.length;j++){
+            var unit=findByPredicate(payloads[j],function(x){
+                if(!x||typeof x!=='object'||!Array.isArray(x.unitOrgs)) return false;
+                return x.unitOrgs.some(function(u){return u&&(Array.isArray(u.positions)||Array.isArray(u.childUnitOrgs));});
+            });
+            if(unit){
+                return {unitOrgs:unit.unitOrgs,unitName:unit.unitName||unit.name||null,unitNumber:unit.unitNumber||null};
+            }
+        }
+        return null;
+    }
+    function findMWCPayload(payloads){
+        var mwcNode=null;
+        var baseNode=null;
+        for(var i=0;i<payloads.length;i++){
+            var p=payloads[i];
+            if(!mwcNode){
+                mwcNode=findByPredicate(p,function(x){
+                    if(!x||typeof x!=='object') return false;
+                    if(x.listOfPersons&&typeof x.listOfPersons==='object') return true;
+                    return !!(x.membersWithCallings&&x.membersWithoutCallings);
+                });
+            }
+            if(!baseNode){
+                baseNode=findByPredicate(p,function(x){
+                    return !!(x&&typeof x==='object'&&x.UnitOrgs&&Array.isArray(x.UnitOrgs));
+                });
+            }
+            if(mwcNode&&baseNode) break;
+        }
+        if(!mwcNode) return null;
+        var lop=mwcNode.listOfPersons&&typeof mwcNode.listOfPersons==='object'
+            ? mwcNode.listOfPersons
+            : {membersWithCallings:mwcNode.membersWithCallings||{},membersWithoutCallings:mwcNode.membersWithoutCallings||{}};
+        var base=(mwcNode.BaseUnitOrgs&&mwcNode.BaseUnitOrgs.UnitOrgs)
+            ? mwcNode.BaseUnitOrgs
+            : (baseNode||null);
+        return {listOfPersons:lop,baseUnitOrgs:(base&&base.UnitOrgs)||[],unitNumber:(base&&base.unitNumber)||mwcNode.unitNumber||null};
+    }
+    function getPayloadsFromJsonScripts(){
+        var out=[];
+        var nodes=document.querySelectorAll('script[type="application/json"],script#__NEXT_DATA__');
+        for(var i=0;i<nodes.length;i++){
+            try{var v=JSON.parse(nodes[i].textContent||'');if(v&&typeof v==='object') out.push(v);}catch(e){}
+        }
+        return out;
+    }
+    var KNOWN_ACTIONS={org:['40e024b9f95791ad9e6001d64a1c86f96128b2bc35'],mwc:['60e5b9f4e68e08227ecf20bf99e02561edc9500812']};
+    function parseFlightRows(text){
+        var out=[];
+        var lines=text.split('\\n');
+        for(var i=0;i<lines.length;i++){
+            var m=/^[0-9a-f]+:([\\[{].*)$/.exec(lines[i]);
+            if(!m) continue;
+            try{out.push(JSON.parse(m[1]));}catch(e){}
+        }
+        return out;
+    }
+    function getLang(){
+        var m=/[?&]lang=([a-z]+)/.exec(location.search);
+        return m?m[1]:'eng';
+    }
+    function getUnitNumber(){
+        try{return self.mltPlatformConfig.context.user.targetUser.selectedUnitContext.unit.unitNumber||null;}catch(e){return null;}
+    }
+    async function discoverActionIds(mode){
+        var srcs={};
+        var nodes=document.querySelectorAll('script[src]');
+        for(var i=0;i<nodes.length;i++) srcs[nodes[i].src]=1;
+        var entries=(self.performance&&performance.getEntriesByType)?performance.getEntriesByType('resource'):[];
+        for(var j=0;j<entries.length;j++){
+            var n=String(entries[j].name||'');
+            if(n.indexOf('/_next/static/')!==-1&&n.split('?')[0].endsWith('.js')) srcs[n]=1;
+        }
+        var want=mode==='org'?/org/i:/(member|calling)/i;
+        var readish=/^(get|fetch|load|list|find|read|query)/i;
+        var unsafe=/(delete|remove|release|update|create|save|set|add|submit|send|approve|reject|cancel|post|put|move|change|edit|sustain|assign)/i;
+        var ids=[];
+        var urls=Object.keys(srcs).slice(0,80);
+        await Promise.all(urls.map(async function(u){
+            try{
+                var r=await fetch(u,{credentials:'same-origin'});
+                if(!r.ok) return;
+                var t=await r.text();
+                var re=/createServerReference\\)?\\(\\s*"([0-9a-f]{40,64})"[^)]*?"([A-Za-z0-9_$]+)"\\)/g;
+                var m;
+                while((m=re.exec(t))){
+                    if(readish.test(m[2])&&want.test(m[2])&&!unsafe.test(m[2])&&ids.indexOf(m[1])===-1) ids.push(m[1]);
+                }
+            }catch(e){}
+        }));
+        return ids;
+    }
+    async function fetchViaAction(mode){
+        var lang=getLang();
+        var unit=getUnitNumber();
+        var args=mode==='org'?[lang]:(unit?[unit,lang]:null);
+        if(!args) return null;
+        var ids=KNOWN_ACTIONS[mode].slice();
+        var tried={};
+        for(var pass=0;pass<2;pass++){
+            for(var i=0;i<ids.length;i++){
+                if(tried[ids[i]]) continue;
+                tried[ids[i]]=1;
+                try{
+                    var res=await fetch(location.href,{method:'POST',credentials:'include',headers:{'Accept':'text/x-component','Next-Action':ids[i],'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(args)});
+                    if(!res.ok) continue;
+                    var rows=parseFlightRows(await res.text());
+                    var hit=mode==='org'?findOrgPayload(rows):findMWCPayload(rows);
+                    if(hit) return hit;
+                }catch(e){}
+            }
+            if(pass===0) ids=await discoverActionIds(mode);
+        }
+        return null;
+    }
+    try{
+        var chunks=getChunksFromRuntime();
+        if(!chunks.length) chunks=getChunksFromScripts();
+        var payloads=extractPayloads(chunks).concat(getPayloadsFromJsonScripts());
+        var path=(location.pathname||'').toLowerCase();
+        var isOrgPage=path.indexOf('/orgs')!==-1;
+        var isMWCPage=path.indexOf('/report/member-callings')!==-1;
+
+        if(!isOrgPage&&!isMWCPage){
+            var hasOrgs=hasTextInChunks(chunks,'unitOrgsMap')||hasTextInChunks(chunks,'orgs?unitOrgTypeId')||hasTextInChunks(chunks,'\"children\":[\"orgs\"');
+            var hasMWC=hasTextInChunks(chunks,'membersWithCallings')||hasTextInChunks(chunks,'member-callings?')||hasTextInChunks(chunks,'\"children\":[\"report\",{\"children\":[\"member-callings\"');
+            if(hasOrgs) isOrgPage=true;
+            else if(hasMWC) isMWCPage=true;
+            else{fail('Not recognized as an LCR Organizations or Members With Callings page.');return;}
+        }
+
+        if(isOrgPage){
+            info('Step 1/2: Reading organization structure...');
+            var orgPayload=findOrgPayload(payloads);
+            if(!orgPayload) orgPayload=await fetchViaAction('org');
+            if(!orgPayload) orgPayload=await fetchJsonCandidates('org');
+            if(orgPayload&&!orgPayload.unitNumber) orgPayload.unitNumber=getUnitNumber();
+            if(!orgPayload||!Array.isArray(orgPayload.unitOrgs)||!orgPayload.unitOrgs.length){
+                localStorage.removeItem('__cm_orgData');
+                warn('Step 1/2 note: this LCR page did not expose the organization tree. You can still continue to the <a href="https://lcr.churchofjesuschrist.org/mlt/report/member-callings?lang=eng" style="color:#fff;font-weight:700;text-decoration:underline">Members With Callings report</a> and run the bookmarklet there. Import will continue in reduced mode without vacancies.');
+                return;
+            }
+            localStorage.setItem('__cm_orgData',JSON.stringify(orgPayload));
+            var orgCount=orgPayload.unitOrgs.length;
+            ok('Step 1/2 done! '+orgCount+' organizations saved. Now open the <a href=\"https://lcr.churchofjesuschrist.org/mlt/report/member-callings?lang=eng\" style=\"color:#fff;font-weight:700;text-decoration:underline\">Members With Callings report</a> and click this bookmarklet again.');
+            return;
+        }
+
+        info('Step 2/2: Reading member & callings data...');
+        var mwcData=findMWCPayload(payloads);
+        if(!mwcData) mwcData=await fetchViaAction('mwc');
+        if(!mwcData) mwcData=await fetchJsonCandidates('mwc');
+        if(!mwcData||!mwcData.listOfPersons){
+            fail('Could not find Members With Callings data on this page. Try refreshing the report page and running the bookmarklet again.');
+            return;
+        }
+
+        var lop=mwcData.listOfPersons;
+        var wc=lop.membersWithCallings||{};
+        var woc=lop.membersWithoutCallings||{};
+        var storedOrg=localStorage.getItem('__cm_orgData');
+        var orgData=null;
+        if(storedOrg){try{orgData=JSON.parse(storedOrg);}catch(e){}}
+
+        var bundle={mwcData:{listOfPersons:lop,baseUnitOrgs:mwcData.baseUnitOrgs||[],unitNumber:mwcData.unitNumber||null}};
+        if(orgData){
+            bundle.orgData=orgData;
+            bundle.source='bookmarklet-combined';
+            localStorage.removeItem('__cm_orgData');
+        } else {
+            bundle.source='bookmarklet-mwc-only';
+        }
+
+        var json=JSON.stringify(bundle);
+        var wcCount=Object.keys(wc).length;
+        var wocCount=Object.keys(woc).length;
+        navigator.clipboard.writeText(json).then(function(){
+            var msg='Done! '+wcCount+' callings + '+wocCount+' members copied ('+Math.round(json.length/1024)+'KB).';
+            if(!orgData) msg+=' NOTE: No org structure found — run Step 1 on the Organizations page first for best results.';
+            msg+=' Switch to Calling Manager and click "Paste from Clipboard".';
+            ok(msg);
+        }).catch(function(e){fail(e.message||'Clipboard write failed');});
+    }catch(e){fail(e.message||'Unknown error');}
 })();`.replace(/\n/g, '').replace(/  +/g, ' ');
 
-        bookmarkletLink.href = 'javascript:' + encodeURIComponent(code);
+    const encodedCode = btoa(unescape(encodeURIComponent(code.trim())));
+    bookmarkletLink.href = `javascript:(function(){var d=decodeURIComponent(escape(atob(${JSON.stringify(encodedCode)})));var s=document.createElement('script');s.text=d;(document.head||document.documentElement).appendChild(s);s.remove();})();`;
         
         // Prevent click from navigating (user should drag to bookmarks bar)
         bookmarkletLink.addEventListener('click', (e) => {
@@ -554,15 +865,67 @@ class CallingManager {
      */
     parseNextDataFromHTML(html) {
         const chunks = [];
-        // Match self.__next_f.push([...]) calls in <script> tags
-        const re = /self\.__next_f\.push\(\s*(\[.+?\])\s*\)/gs;
-        let m;
-        while ((m = re.exec(html)) !== null) {
-            try {
-                const arr = JSON.parse(m[1]);
-                chunks.push(arr);
-            } catch (e) {
-                // Some chunks may not be simple JSON — skip
+        const needle = 'self.__next_f.push(';
+        let pos = 0;
+
+        while (true) {
+            const start = html.indexOf(needle, pos);
+            if (start === -1) break;
+
+            let i = start + needle.length;
+            let depth = 1;
+            let inStr = false;
+            let quote = '';
+            let esc = false;
+
+            for (; i < html.length; i++) {
+                const ch = html[i];
+
+                if (inStr) {
+                    if (esc) {
+                        esc = false;
+                        continue;
+                    }
+                    if (ch === '\\') {
+                        esc = true;
+                        continue;
+                    }
+                    if (ch === quote) {
+                        inStr = false;
+                        quote = '';
+                    }
+                    continue;
+                }
+
+                if (ch === '"' || ch === '\'' || ch === '`') {
+                    inStr = true;
+                    quote = ch;
+                    continue;
+                }
+
+                if (ch === '(') {
+                    depth++;
+                    continue;
+                }
+
+                if (ch === ')') {
+                    depth--;
+                    if (depth === 0) {
+                        const arg = html.slice(start + needle.length, i).trim();
+                        try {
+                            const arr = JSON.parse(arg);
+                            chunks.push(arr);
+                        } catch (e) {
+                            // Some chunks may not be simple JSON — skip
+                        }
+                        pos = i + 1;
+                        break;
+                    }
+                }
+            }
+
+            if (depth !== 0) {
+                pos = start + needle.length;
             }
         }
         return chunks;
