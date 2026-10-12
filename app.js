@@ -148,6 +148,11 @@ class CallingManager {
             validationRulesBtn.addEventListener('click', () => this.showValidationRulesModal());
         }
 
+        const updateLcrBtn = document.getElementById('update-lcr-btn');
+        if (updateLcrBtn) {
+            updateLcrBtn.addEventListener('click', () => this.openLcrMerge());
+        }
+
         // Build and set the bookmarklet href
         this.initBookmarklet();
 
@@ -4194,7 +4199,8 @@ class CallingManager {
     }
 
     undoChange() {
-        if (this.changeHistory.length === 0) {
+        // Merged scenarios carry report entries without snapshots; don't discard them
+        if (!this.changeHistory.some(e => e.data)) {
             alert('No changes to undo');
             return;
         }
@@ -4242,8 +4248,8 @@ class CallingManager {
     updateUndoButton() {
         const undoBtn = document.getElementById('undo-btn');
         if (undoBtn) {
-            undoBtn.disabled = this.changeHistory.length === 0;
-            if (this.changeHistory.length > 0) {
+            undoBtn.disabled = !this.changeHistory.some(e => e.data);
+            if (!undoBtn.disabled) {
                 // Show the last visible (non-snapshot) description, or fall back to any last entry
                 let desc = '';
                 for (let i = this.changeHistory.length - 1; i >= 0; i--) {
@@ -4539,6 +4545,230 @@ class CallingManager {
         // The considering array will be cleared in performAssignment if the assignment succeeds
         this.pendingAssignment = { orgId: org.id, callingId: calling.id, callingIndex, isNew: !calling.member };
         this.selectMember(member);
+    }
+
+    // ── Merge fresh LCR data into existing scenarios ──
+
+    mergeEl(tag, text, className) {
+        const e = document.createElement(tag);
+        if (text !== undefined && text !== null) e.textContent = text;
+        if (className) e.className = className;
+        return e;
+    }
+
+    openLcrMerge() {
+        if (!this.originalData || this.scenarios.length === 0) {
+            alert('Open a scenario first.');
+            return;
+        }
+        this.saveSessionState();
+        this.lcrMerge = null;
+        this.renderLcrMergeStart();
+        document.getElementById('lcr-merge-modal').classList.add('active');
+    }
+
+    closeLcrMerge() {
+        document.getElementById('lcr-merge-modal').classList.remove('active');
+        this.lcrMerge = null;
+    }
+
+    renderLcrMergeStart() {
+        const body = document.getElementById('lcr-merge-body');
+        body.innerHTML = '';
+        body.appendChild(this.mergeEl('p', 'Bring your scenarios up to date after callings have been acted on in LCR. Changes made in LCR are applied to every scenario, your planned changes are kept, and anything already done in LCR is cleared from your pending changes.'));
+        const steps = this.mergeEl('ol');
+        steps.style.margin = '12px 0 12px 20px';
+        ['Run the LCR bookmarklet on the Organizations page, then on the Members With Callings report.',
+         'Come back here and click Paste from Clipboard.'].forEach(t => steps.appendChild(this.mergeEl('li', t)));
+        body.appendChild(steps);
+
+        const status = this.mergeEl('p', '', 'import-status');
+        const actions = this.mergeEl('div', null, 'modal-actions');
+        const pasteBtn = this.mergeEl('button', 'Paste from Clipboard', 'primary-btn');
+        pasteBtn.onclick = () => this.loadLcrMergeData(status);
+        const cancelBtn = this.mergeEl('button', 'Cancel', 'secondary-btn');
+        cancelBtn.onclick = () => this.closeLcrMerge();
+        actions.append(pasteBtn, cancelBtn);
+        body.append(status, actions);
+    }
+
+    async loadLcrMergeData(statusEl) {
+        const fail = (msg) => {
+            statusEl.textContent = msg;
+            statusEl.className = 'import-status error';
+        };
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text || !text.trim()) return fail('Clipboard is empty. Run the bookmarklet on LCR first.');
+            const bundle = JSON.parse(text);
+            if (!bundle.mwcData) return fail('Clipboard data isn\'t from the LCR bookmarklet.');
+
+            const result = this.convertCombinedData(bundle.orgData, bundle.mwcData);
+            const newOrgs = result.callingsData.subOrgs;
+            if (!newOrgs.length) return fail('No organizations found in the data.');
+
+            const oldIds = new Set(this.originalData.subOrgs.map(o => String(o.id)));
+            const overlap = newOrgs.filter(o => oldIds.has(String(o.id))).length / newOrgs.length;
+            if (overlap < 0.5) {
+                return fail('This data doesn\'t line up with your scenarios. Make sure you ran the bookmarklet on both LCR pages (organizations first).');
+            }
+
+            const analyses = this.scenarios.map(s =>
+                LCRMerge.analyzeScenario(this.originalData, s, result.callingsData));
+            this.lcrMerge = { result, analyses, choices: {} };
+            this.renderLcrMergeReview();
+        } catch (e) {
+            if (e.name === 'NotAllowedError') fail('Clipboard access denied.');
+            else if (e instanceof SyntaxError) fail('Clipboard doesn\'t contain valid JSON. Run the bookmarklet on LCR first.');
+            else {
+                console.error('LCR merge error:', e);
+                fail('Error: ' + e.message);
+            }
+        }
+    }
+
+    renderLcrMergeReview() {
+        const { result, analyses } = this.lcrMerge;
+        const body = document.getElementById('lcr-merge-body');
+        body.innerHTML = '';
+        const who = (m) => (m ? m.name : 'Vacant');
+
+        body.appendChild(this.mergeEl('p', `New LCR data: ${result.callingsData.subOrgs.length} organizations, ${result.memberList.length} members.`));
+
+        const labels = {
+            lcr: 'changed in LCR and updated here',
+            done: 'of your planned changes are already done in LCR (cleared from pending)',
+            plan: 'of your planned changes are still pending (kept)',
+            partial: 'of your planned changes are partly done in LCR (remaining part kept)'
+        };
+
+        this.scenarios.forEach((scenario, idx) => {
+            const analysis = analyses[idx];
+            const section = this.mergeEl('div', null, 'merge-section');
+            section.appendChild(this.mergeEl('h3', scenario.name));
+
+            const summary = this.mergeEl('ul');
+            Object.keys(labels).forEach(kind => {
+                const items = analysis.items.filter(i => i.kind === kind);
+                if (!items.length) return;
+                const li = this.mergeEl('li');
+                const details = this.mergeEl('details');
+                details.appendChild(this.mergeEl('summary', `${items.length} ${labels[kind]}`));
+                const list = this.mergeEl('ul');
+                items.forEach(i => {
+                    const text = (kind === 'plan' || kind === 'partial')
+                        ? `LCR now: ${who(i.nMember)}; your plan: ${who(i.sMember)}`
+                        : `${who(kind === 'lcr' ? i.oMember : i.sMember)} \u2192 ${who(i.nMember)}`;
+                    list.appendChild(this.mergeEl('li', `${i.orgName} \u2013 ${i.callingName}: ${text}`));
+                });
+                details.appendChild(list);
+                li.appendChild(details);
+                summary.appendChild(li);
+            });
+            if (!summary.children.length) summary.appendChild(this.mergeEl('li', 'No differences affecting this scenario.'));
+            section.appendChild(summary);
+
+            const conflicts = analysis.items.filter(i => i.kind === 'conflict');
+            if (conflicts.length) {
+                section.appendChild(this.mergeEl('p', `${conflicts.length} need${conflicts.length === 1 ? 's' : ''} your decision:`, 'merge-conflict-title'));
+                conflicts.forEach(item => {
+                    const box = this.mergeEl('div', null, 'merge-conflict');
+                    box.appendChild(this.mergeEl('strong', `${item.orgName} \u2013 ${item.callingName}`));
+                    if (item.ambiguous) {
+                        box.appendChild(this.mergeEl('div', 'Could not tell whether LCR changed here, so your plan is selected by default.', 'merge-note'));
+                    }
+                    const choiceKey = `${scenario.id}|${item.key}`;
+                    const options = [
+                        ['s', `Keep my plan: ${who(item.sMember)}`],
+                        ['n', `Use LCR: ${who(item.nMember)}`]
+                    ];
+                    options.forEach(([value, text]) => {
+                        const label = this.mergeEl('label', null, 'merge-choice');
+                        const radio = document.createElement('input');
+                        radio.type = 'radio';
+                        radio.name = `merge-${choiceKey}`;
+                        radio.value = value;
+                        radio.checked = (this.lcrMerge.choices[choiceKey] || item.use) === value;
+                        radio.onchange = () => { this.lcrMerge.choices[choiceKey] = value; };
+                        label.append(radio, ` ${text}`);
+                        box.appendChild(label);
+                    });
+                    section.appendChild(box);
+                });
+            }
+
+            analysis.warnings.forEach(w => section.appendChild(this.mergeEl('p', w, 'merge-note')));
+            body.appendChild(section);
+        });
+
+        body.appendChild(this.mergeEl('p', 'A backup of your current session is saved in this browser before anything changes. Undo history is cleared by the merge.', 'merge-note'));
+        const actions = this.mergeEl('div', null, 'modal-actions');
+        const applyBtn = this.mergeEl('button', 'Apply Merge', 'primary-btn');
+        applyBtn.onclick = () => this.applyLcrMerge();
+        const backBtn = this.mergeEl('button', 'Back', 'secondary-btn');
+        backBtn.onclick = () => this.renderLcrMergeStart();
+        actions.append(applyBtn, backBtn);
+        body.appendChild(actions);
+    }
+
+    applyLcrMerge() {
+        const { result, analyses, choices } = this.lcrMerge;
+        const newData = result.callingsData;
+
+        localStorage.setItem('callingManagerSessionBackup', localStorage.getItem('callingManagerSession') || '');
+
+        this.scenarios.forEach((scenario, idx) => {
+            const scenarioChoices = {};
+            analyses[idx].items.forEach(item => {
+                const picked = choices[`${scenario.id}|${item.key}`];
+                if (picked) scenarioChoices[item.key] = picked;
+            });
+            const merged = LCRMerge.buildScenario(newData, analyses[idx], scenarioChoices);
+            scenario.data = merged.data;
+            scenario.changeHistory = merged.changeHistory;
+            scenario.changedCallings = merged.changedCallings;
+        });
+
+        this.originalData = JSON.parse(JSON.stringify(newData));
+
+        // Keep members added by hand or referenced by a plan even if LCR no longer lists them
+        const known = new Set(result.memberList.map(m => String(m.id)));
+        const members = [...result.memberList];
+        this.memberList.forEach(m => {
+            if (typeof m.id === 'number' && !known.has(String(m.id))) {
+                members.push(m);
+                known.add(String(m.id));
+            }
+        });
+        this.scenarios.forEach(s => s.data.subOrgs.forEach(o => o.callings.forEach(c => {
+            if (c.member && !known.has(String(c.member.id))) {
+                members.push({ id: c.member.id, name: c.member.name });
+                known.add(String(c.member.id));
+            }
+        })));
+        this.memberList = members.sort((a, b) => a.name.localeCompare(b.name));
+
+        const current = this.scenarios.find(s => s.id === this.currentScenarioId) || this.scenarios[0];
+        this.currentScenarioId = current.id;
+        this.callingsData = JSON.parse(JSON.stringify(current.data));
+        this.changeHistory = [...current.changeHistory];
+        this.changedCallings = new Set(current.changedCallings);
+
+        this.saveData();
+        this.renderScenarioTabs();
+        this.renderAllOrganizations();
+        this.updateVisibilityLists();
+        this.updateUndoButton();
+
+        const body = document.getElementById('lcr-merge-body');
+        body.innerHTML = '';
+        body.appendChild(this.mergeEl('p', 'Your scenarios are now up to date with LCR.'));
+        const actions = this.mergeEl('div', null, 'modal-actions');
+        const closeBtn = this.mergeEl('button', 'Close', 'primary-btn');
+        closeBtn.onclick = () => this.closeLcrMerge();
+        actions.appendChild(closeBtn);
+        body.appendChild(actions);
+        this.lcrMerge = null;
     }
 
     // Scenario Management Methods
