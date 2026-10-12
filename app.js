@@ -168,6 +168,85 @@ class CallingManager {
                 document.getElementById('about-modal').classList.add('active');
             });
         }
+
+        this.initReportForm();
+    }
+
+    initReportForm() {
+        const REPORT_URL = 'https://callingmanager-report.timberandlightcreations.workers.dev';
+        const TURNSTILE_SITE_KEY = '0x4AAAAAAFUMq9RKewomSlgo';
+        const link = document.getElementById('footer-report-link');
+        const modal = document.getElementById('report-modal');
+        const form = document.getElementById('report-form');
+        if (!link || !modal || !form) return;
+
+        const status = document.getElementById('report-status');
+        const submit = document.getElementById('report-submit');
+        let widgetId = null;
+        let scriptPromise = null;
+
+        const loadTurnstile = () => {
+            if (!scriptPromise) {
+                scriptPromise = new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                    s.onload = resolve;
+                    s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+            }
+            return scriptPromise;
+        };
+
+        const setStatus = (msg, isErr) => {
+            status.textContent = msg;
+            status.className = 'import-status ' + (isErr ? 'error' : 'success');
+        };
+
+        link.addEventListener('click', async (e) => {
+            e.preventDefault();
+            modal.classList.add('active');
+            try {
+                await loadTurnstile();
+                if (widgetId === null) {
+                    widgetId = window.turnstile.render('#report-turnstile', { sitekey: TURNSTILE_SITE_KEY });
+                }
+            } catch (err) {
+                setStatus('Could not load the bot check. Please try again later.', true);
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = widgetId !== null ? window.turnstile.getResponse(widgetId) : '';
+            if (!token) {
+                setStatus('Please complete the bot check.', true);
+                return;
+            }
+            submit.disabled = true;
+            setStatus('Submitting...', false);
+            try {
+                const res = await fetch(REPORT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: document.getElementById('report-title').value,
+                        details: document.getElementById('report-details').value,
+                        website: document.getElementById('report-website').value,
+                        turnstileToken: token
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Submission failed');
+                setStatus(data.message || 'Thanks! Your report was submitted.', false);
+                form.reset();
+            } catch (err) {
+                setStatus(err.message || 'Submission failed. Please try again.', true);
+            } finally {
+                submit.disabled = false;
+                window.turnstile.reset(widgetId);
+            }
+        });
     }
 
     checkStoredData() {
