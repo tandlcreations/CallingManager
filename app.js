@@ -174,32 +174,34 @@ class CallingManager {
             });
         }
 
-        this.initReportForm();
+        this.initFeedbackForm({ prefix: 'report', type: 'issue', linkId: 'footer-report-link' });
+        this.initFeedbackForm({ prefix: 'feature', type: 'feature', linkId: 'footer-feature-link' });
     }
 
-    initReportForm() {
+    // Shared by the "Report an issue" and "Request a feature" forms; element ids are `${prefix}-*`.
+    initFeedbackForm({ prefix, type, linkId }) {
         const REPORT_URL = 'https://callingmanager-report.timberandlightcreations.workers.dev';
         const TURNSTILE_SITE_KEY = '0x4AAAAAAFUMq9RKewomSlgo';
-        const link = document.getElementById('footer-report-link');
-        const modal = document.getElementById('report-modal');
-        const form = document.getElementById('report-form');
+        const byId = (suffix) => document.getElementById(`${prefix}-${suffix}`);
+        const link = document.getElementById(linkId);
+        const modal = byId('modal');
+        const form = byId('form');
         if (!link || !modal || !form) return;
 
-        const status = document.getElementById('report-status');
-        const submit = document.getElementById('report-submit');
-        const success = document.getElementById('report-success');
-        const issueLink = document.getElementById('report-issue-link');
-        document.getElementById('report-another').addEventListener('click', () => {
+        const status = byId('status');
+        const submit = byId('submit');
+        const success = byId('success');
+        const issueLink = byId('issue-link');
+        byId('another').addEventListener('click', () => {
             success.style.display = 'none';
             form.style.display = '';
             status.textContent = '';
         });
         let widgetId = null;
-        let scriptPromise = null;
 
         const loadTurnstile = () => {
-            if (!scriptPromise) {
-                scriptPromise = new Promise((resolve, reject) => {
+            if (!CallingManager.turnstileScript) {
+                CallingManager.turnstileScript = new Promise((resolve, reject) => {
                     const s = document.createElement('script');
                     s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
                     s.onload = resolve;
@@ -207,7 +209,7 @@ class CallingManager {
                     document.head.appendChild(s);
                 });
             }
-            return scriptPromise;
+            return CallingManager.turnstileScript;
         };
 
         const setStatus = (msg, isErr) => {
@@ -221,7 +223,7 @@ class CallingManager {
             try {
                 await loadTurnstile();
                 if (widgetId === null) {
-                    widgetId = window.turnstile.render('#report-turnstile', { sitekey: TURNSTILE_SITE_KEY });
+                    widgetId = window.turnstile.render(`#${prefix}-turnstile`, { sitekey: TURNSTILE_SITE_KEY });
                 }
             } catch (err) {
                 setStatus('Could not load the bot check. Please try again later.', true);
@@ -238,13 +240,16 @@ class CallingManager {
             submit.disabled = true;
             setStatus('Submitting...', false);
             try {
+                const ideaField = byId('idea');
                 const res = await fetch(REPORT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        title: document.getElementById('report-title').value,
-                        details: document.getElementById('report-details').value,
-                        website: document.getElementById('report-website').value,
+                        type,
+                        title: byId('title').value,
+                        details: byId('details').value,
+                        idea: ideaField ? ideaField.value : '',
+                        website: byId('website').value,
                         turnstileToken: token
                     })
                 });

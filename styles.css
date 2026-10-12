@@ -1914,14 +1914,14 @@ footer {
     border-color: var(--primary-color);
 }
 
-#report-form label {
+.feedback-form label {
     display: block;
     margin-bottom: var(--spacing-4);
     font-weight: 600;
     font-size: 0.875rem;
 }
 
-#report-form textarea {
+.feedback-form textarea {
     resize: vertical;
 }
 

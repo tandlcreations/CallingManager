@@ -316,6 +316,8 @@
                     <a href="#" id="footer-privacy-link">Is this okay?</a>
                     <span class="footer-sep">·</span>
                     <a href="#" id="footer-report-link">Report an issue</a>
+                    <span class="footer-sep">·</span>
+                    <a href="#" id="footer-feature-link">Request a feature</a>
                 </div>
                 <p class="footer-copy">© 2026 Ward Calling Manager · Not an official website of <a href="https://churchofjesuschrist.org/" target="_blank">The Church of Jesus Christ of Latter-day Saints</a></p>
             </div>
@@ -391,7 +393,7 @@
                 <h2>Report an Issue</h2>
                 <button class="close-btn" onclick="document.getElementById('report-modal').classList.remove('active')">&times;</button>
             </div>
-            <form id="report-form" class="modal-body" style="text-align: left;">
+            <form id="report-form" class="modal-body feedback-form" style="text-align: left;">
                 <p class="report-warning"><strong>Do not include member names or any LCR data.</strong> This report is sent to a server and posted as a public GitHub issue. Nothing from your calling data is sent unless you type it here.</p>
                 <label for="report-title">Summary</label>
                 <input type="text" id="report-title" class="modal-search" maxlength="120" required />
@@ -412,6 +414,41 @@
                 <div class="modal-actions">
                     <button type="button" id="report-another" class="secondary-btn">Report another issue</button>
                     <button type="button" class="primary-btn" onclick="document.getElementById('report-modal').classList.remove('active')">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request a Feature Modal -->
+    <div id="feature-modal" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="modal-header">
+                <h2>Request a Feature</h2>
+                <button class="close-btn" onclick="document.getElementById('feature-modal').classList.remove('active')">&times;</button>
+            </div>
+            <form id="feature-form" class="modal-body feedback-form" style="text-align: left;">
+                <p class="report-warning"><strong>Do not include member names or any LCR data.</strong> This request is sent to a server and posted as a public GitHub issue. Nothing from your calling data is sent unless you type it here.</p>
+                <label for="feature-title">Summary</label>
+                <input type="text" id="feature-title" class="modal-search" maxlength="120" required />
+                <label for="feature-details">What are you trying to do?</label>
+                <textarea id="feature-details" class="modal-search" rows="5" maxlength="2000" required></textarea>
+                <label for="feature-idea">How do you imagine it working? (optional)</label>
+                <textarea id="feature-idea" class="modal-search" rows="4" maxlength="2000"></textarea>
+                <input type="text" id="feature-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px;" />
+                <div id="feature-turnstile"></div>
+                <p id="feature-status" class="import-status"></p>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-btn" onclick="document.getElementById('feature-modal').classList.remove('active')">Cancel</button>
+                    <button type="submit" id="feature-submit" class="primary-btn">Submit</button>
+                </div>
+            </form>
+            <div id="feature-success" class="modal-body" style="text-align: left; display: none;">
+                <p><strong>Thanks! Your request was submitted.</strong></p>
+                <p>You can follow it here: <a id="feature-issue-link" href="#" target="_blank" rel="noopener"></a></p>
+                <p style="font-size: 0.875rem;">Anyone can read the request. A free GitHub account is only needed if you want to comment on it or get notified of updates.</p>
+                <div class="modal-actions">
+                    <button type="button" id="feature-another" class="secondary-btn">Request another feature</button>
+                    <button type="button" class="primary-btn" onclick="document.getElementById('feature-modal').classList.remove('active')">Close</button>
                 </div>
             </div>
         </div>
@@ -446,7 +483,7 @@
         </div>
     </div>
 
-    <script src="merge.js?v=20261011"></script>
-    <script src="app.js?v=20261011"></script>
+    <script src="merge.js?v=20261011b"></script>
+    <script src="app.js?v=20261011b"></script>
 </body>
 </html>
