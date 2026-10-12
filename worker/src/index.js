@@ -62,6 +62,10 @@ export default {
     });
     if (!gh.ok) return reply(502, 'Could not file the report. Please try again later.');
 
-    return reply(200, 'Thanks! Your report was submitted.');
+    const issue = await gh.json();
+    return new Response(JSON.stringify({ message: 'Thanks! Your report was submitted.', url: issue.html_url }), {
+      status: 200,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
   },
 };

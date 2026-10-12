@@ -397,6 +397,15 @@
                     <button type="submit" id="report-submit" class="primary-btn">Submit</button>
                 </div>
             </form>
+            <div id="report-success" class="modal-body" style="text-align: left; display: none;">
+                <p><strong>Thanks! Your report was submitted.</strong></p>
+                <p>You can follow it here: <a id="report-issue-link" href="#" target="_blank" rel="noopener"></a></p>
+                <p style="font-size: 0.875rem;">Anyone can read the issue. A free GitHub account is only needed if you want to comment on it or get notified of updates.</p>
+                <div class="modal-actions">
+                    <button type="button" id="report-another" class="secondary-btn">Report another issue</button>
+                    <button type="button" class="primary-btn" onclick="document.getElementById('report-modal').classList.remove('active')">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 

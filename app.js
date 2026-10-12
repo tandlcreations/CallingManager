@@ -182,6 +182,13 @@ class CallingManager {
 
         const status = document.getElementById('report-status');
         const submit = document.getElementById('report-submit');
+        const success = document.getElementById('report-success');
+        const issueLink = document.getElementById('report-issue-link');
+        document.getElementById('report-another').addEventListener('click', () => {
+            success.style.display = 'none';
+            form.style.display = '';
+            status.textContent = '';
+        });
         let widgetId = null;
         let scriptPromise = null;
 
@@ -240,6 +247,12 @@ class CallingManager {
                 if (!res.ok) throw new Error(data.message || 'Submission failed');
                 setStatus(data.message || 'Thanks! Your report was submitted.', false);
                 form.reset();
+                if (typeof data.url === 'string' && data.url.startsWith('https://github.com/')) {
+                    issueLink.href = data.url;
+                    issueLink.textContent = data.url;
+                    form.style.display = 'none';
+                    success.style.display = '';
+                }
             } catch (err) {
                 setStatus(err.message || 'Submission failed. Please try again.', true);
             } finally {
